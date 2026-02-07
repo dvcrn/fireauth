@@ -24,6 +24,13 @@ Token validation uses an adapter (default `Fireauth.FirebaseTokenValidator`):
 config :fireauth, :token_validator_adapter, Fireauth.FirebaseTokenValidator
 ```
 
+On application start, `:fireauth` will prefetch Google's SecureToken public keys
+and log download status. You can disable the prefetch with:
+
+```elixir
+config :fireauth, :prefetch_public_keys, false
+```
+
 ## Usage
 
 Verify a token:
