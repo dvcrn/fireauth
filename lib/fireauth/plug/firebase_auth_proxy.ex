@@ -6,14 +6,14 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   `https://<project>.firebaseapp.com` to make redirect-based auth work reliably
   across modern browsers (storage partitioning / third-party cookie restrictions).
 
-  This plug uses `Fireauth.FirebaseCache` (Agent) to cache successful responses
+  This plug uses `Fireauth.FirebaseUpstreamCache` (Agent) to cache successful responses
   and only hit the upstream on cache miss.
   """
 
   import Plug.Conn
 
   alias Fireauth.Config
-  alias Fireauth.FirebaseCache
+  alias Fireauth.FirebaseUpstreamCache
   alias Fireauth.FirebaseUpstream
 
   @behaviour Plug
@@ -40,16 +40,22 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   @impl true
   def call(%Plug.Conn{} = conn, opts) do
     if conn.method in ["GET", "HEAD"] and proxied_path?(conn.request_path) do
-      _ = FirebaseCache.ensure_started()
-
       key = cache_key(conn, opts)
 
-      case FirebaseCache.get(key) do
-        {:hit, entry} ->
-          serve_cached(conn, entry)
+      case Process.whereis(FirebaseUpstreamCache) do
+        nil ->
+          # If the cache agent isn't running (e.g. plug used without starting
+          # the :fireauth app), still serve the proxied content without caching.
+          fetch_and_serve(conn, opts, nil)
 
-        :miss ->
-          fetch_and_serve(conn, opts, key)
+        _pid ->
+          case FirebaseUpstreamCache.get(key) do
+            {:hit, entry} ->
+              serve_cached(conn, entry)
+
+            :miss ->
+              fetch_and_serve(conn, opts, key)
+          end
       end
     else
       conn
@@ -88,7 +94,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
     end)
   end
 
-  defp fetch_and_serve(conn, opts, key) do
+  defp fetch_and_serve(conn, opts, key_or_nil) do
     with {:ok, project_id} <- fetch_project_id(opts),
          {:ok, %{status: status, headers: headers, body: body}} <-
            FirebaseUpstream.fetch(project_id, conn.request_path, query_string(conn)) do
@@ -100,10 +106,10 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
         |> ensure_content_type(content_type)
 
       # Cache only successful responses; Firebase helper files are static-ish.
-      if status == 200 do
+      if status == 200 and not is_nil(key_or_nil) do
         ttl_ms = Keyword.get(opts, :firebase_cache_ttl_ms, @default_cache_ttl_ms)
 
-        FirebaseCache.put(key, %{
+        FirebaseUpstreamCache.put(key_or_nil, %{
           status: status,
           headers: resp_headers,
           body: body,

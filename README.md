@@ -36,8 +36,8 @@ config :fireauth, :prefetch_public_keys, false
 Verify a token:
 
 ```elixir
-{:ok, claims} = Fireauth.TokenValidator.verify_id_token(id_token)
-attrs = Fireauth.Firebase.claims_to_user_attrs(claims)
+{:ok, claims} = Fireauth.verify_id_token(id_token)
+attrs = Fireauth.claims_to_user_attrs(claims)
 ```
 
 Plug into a Phoenix endpoint (before `Plug.Static`):

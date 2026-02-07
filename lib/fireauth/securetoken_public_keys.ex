@@ -22,6 +22,17 @@ defmodule Fireauth.SecureTokenPublicKeys do
     Agent.start_link(fn -> init_state(opts) end, name: __MODULE__)
   end
 
+  @doc false
+  @spec put_keys(map(), non_neg_integer()) :: :ok
+  def put_keys(%{} = keys, ttl_seconds) when is_integer(ttl_seconds) and ttl_seconds >= 0 do
+    ensure_started!()
+    now_s = now_s()
+
+    Agent.update(__MODULE__, fn _st ->
+      %{keys: keys, expires_at_s: now_s + ttl_seconds}
+    end)
+  end
+
   @spec get_for_kid(String.t()) :: {:ok, String.t()} | {:error, term()}
   def get_for_kid(kid) when is_binary(kid) and kid != "" do
     with {:ok, keys} <- get_keys() do
@@ -182,4 +193,3 @@ defmodule Fireauth.SecureTokenPublicKeys do
   defp to_binary(data) when is_binary(data), do: data
   defp to_binary(data) when is_list(data), do: IO.iodata_to_binary(data)
 end
-

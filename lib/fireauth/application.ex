@@ -6,7 +6,8 @@ defmodule Fireauth.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      {Fireauth.SecureTokenPublicKeys, []}
+      {Fireauth.SecureTokenPublicKeys, []},
+      {Fireauth.FirebaseUpstreamCache, []}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Fireauth.Supervisor)

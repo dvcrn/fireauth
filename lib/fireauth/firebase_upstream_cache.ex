@@ -1,4 +1,4 @@
-defmodule Fireauth.FirebaseCache do
+defmodule Fireauth.FirebaseUpstreamCache do
   @moduledoc """
   In-memory cache for Firebase hosted auth helper files.
 
@@ -20,21 +20,6 @@ defmodule Fireauth.FirebaseCache do
 
   def start_link(_opts \\ []) do
     Agent.start_link(fn -> %{} end, name: __MODULE__)
-  end
-
-  @spec ensure_started() :: :ok | {:error, term()}
-  def ensure_started do
-    case Process.whereis(__MODULE__) do
-      nil ->
-        case start_link([]) do
-          {:ok, _pid} -> :ok
-          {:error, {:already_started, _pid}} -> :ok
-          {:error, _} = err -> err
-        end
-
-      _pid ->
-        :ok
-    end
   end
 
   @spec get(key()) :: {:hit, entry()} | :miss
@@ -80,4 +65,3 @@ defmodule Fireauth.FirebaseCache do
 
   defp now_ms, do: System.system_time(:millisecond)
 end
-

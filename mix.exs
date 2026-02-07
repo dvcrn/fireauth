@@ -7,6 +7,7 @@ defmodule Fireauth.MixProject do
       description: "Firebase Auth helpers for Phoenix/Plug (ID token verification + hosted auth helper files)",
       version: "0.1.0",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       package: package(),
@@ -27,6 +28,7 @@ defmodule Fireauth.MixProject do
       {:req, "~> 0.5"},
       {:jose, "~> 1.11"},
       {:plug, "~> 1.15"},
+      {:mox, "~> 1.1", only: :test},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: :dev, runtime: false}
@@ -45,4 +47,7 @@ defmodule Fireauth.MixProject do
       lint: ["credo --strict", "dialyzer"]
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

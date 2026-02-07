@@ -2,7 +2,7 @@ defmodule Fireauth.Plug do
   @moduledoc """
   Plug middleware that:
 
-  1. Serves self-hosted Firebase auth helper files at `/__/auth/*` (optional).
+  1. Proxies (or serves) Firebase auth helper files at `/__/auth/*` (optional).
   2. If `Authorization: Bearer <id_token>` is present, verifies the token and
      attaches claims to `conn.assigns`.
 
@@ -14,8 +14,6 @@ defmodule Fireauth.Plug do
 
   import Plug.Conn
 
-  alias Fireauth.Firebase
-  alias Fireauth.TokenValidator
   alias Fireauth.Plug.FirebaseAuthProxy
   alias Fireauth.Plug.HostedAuthFiles
 
@@ -58,14 +56,14 @@ defmodule Fireauth.Plug do
         conn
 
       token ->
-        case TokenValidator.verify_id_token(token, opts) do
+        case Fireauth.verify_id_token(token, opts) do
           {:ok, claims} ->
             assigns_key = Keyword.fetch!(opts, :assigns_key)
 
             fireauth = %{
               token: token,
               claims: claims,
-              user_attrs: Firebase.claims_to_user_attrs(claims)
+              user_attrs: Fireauth.claims_to_user_attrs(claims)
             }
 
             assign(conn, assigns_key, fireauth)
