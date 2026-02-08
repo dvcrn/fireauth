@@ -1,3 +1,15 @@
 [tools]
 elixir = "1.19.5-otp-28"
 erlang = "28.3.1"
+
+[tasks.test]
+run = "mix test"
+description = "Run tests"
+
+[tasks.format]
+run = "mix format"
+description = "Format code"
+
+[tasks.lint]
+run = "mix lint"
+description = "Run credo and dialyzer"
