@@ -32,22 +32,7 @@ defmodule Fireauth.Plug do
 
   @impl true
   def call(conn, opts) do
-    conn =
-      if Keyword.get(opts, :serve_hosted_auth?, true) do
-        case Keyword.get(opts, :hosted_auth_mode, :proxy) do
-          :proxy ->
-            conn = FirebaseAuthProxy.call(conn, opts)
-            if conn.halted, do: conn, else: HostedAuthFiles.call(conn, opts)
-
-          :static ->
-            HostedAuthFiles.call(conn, opts)
-
-          _ ->
-            conn
-        end
-      else
-        conn
-      end
+    conn = maybe_serve_hosted_auth(conn, opts)
 
     if conn.halted do
       conn
@@ -56,42 +41,69 @@ defmodule Fireauth.Plug do
     end
   end
 
+  defp maybe_serve_hosted_auth(conn, opts) do
+    if Keyword.get(opts, :serve_hosted_auth?, true) do
+      do_serve_hosted_auth(conn, opts)
+    else
+      conn
+    end
+  end
+
+  defp do_serve_hosted_auth(conn, opts) do
+    case Keyword.get(opts, :hosted_auth_mode, :proxy) do
+      :proxy ->
+        conn = FirebaseAuthProxy.call(conn, opts)
+        if conn.halted, do: conn, else: HostedAuthFiles.call(conn, opts)
+
+      :static ->
+        HostedAuthFiles.call(conn, opts)
+
+      _ ->
+        conn
+    end
+  end
+
   defp maybe_attach_firebase_claims(%Plug.Conn{} = conn, opts) do
     case bearer_token(conn) do
-      nil ->
+      nil -> conn
+      token -> verify_and_attach(conn, token, opts)
+    end
+  end
+
+  defp verify_and_attach(conn, token, opts) do
+    case Fireauth.verify_id_token(token, opts) do
+      {:ok, claims} ->
+        assigns_key = Keyword.fetch!(opts, :assigns_key)
+
+        fireauth = %{
+          token: token,
+          claims: claims,
+          user_attrs: Fireauth.claims_to_user_attrs(claims)
+        }
+
+        assign(conn, assigns_key, fireauth)
+
+      {:error, reason} ->
+        handle_invalid_token(conn, reason, opts)
+    end
+  end
+
+  defp handle_invalid_token(conn, reason, opts) do
+    case Keyword.get(opts, :on_invalid_token, :ignore) do
+      :ignore ->
         conn
 
-      token ->
-        case Fireauth.verify_id_token(token, opts) do
-          {:ok, claims} ->
-            assigns_key = Keyword.fetch!(opts, :assigns_key)
+      :unauthorized ->
+        conn
+        |> put_resp_header("www-authenticate", ~s(Bearer realm="firebase"))
+        |> send_resp(401, "unauthorized")
+        |> halt()
 
-            fireauth = %{
-              token: token,
-              claims: claims,
-              user_attrs: Fireauth.claims_to_user_attrs(claims)
-            }
+      {:assign_error, error_key} when is_atom(error_key) ->
+        assign(conn, error_key, reason)
 
-            assign(conn, assigns_key, fireauth)
-
-          {:error, reason} ->
-            case Keyword.get(opts, :on_invalid_token, :ignore) do
-              :ignore ->
-                conn
-
-              :unauthorized ->
-                conn
-                |> put_resp_header("www-authenticate", ~s(Bearer realm="firebase"))
-                |> send_resp(401, "unauthorized")
-                |> halt()
-
-              {:assign_error, error_key} when is_atom(error_key) ->
-                assign(conn, error_key, reason)
-
-              _ ->
-                conn
-            end
-        end
+      _ ->
+        conn
     end
   end
 

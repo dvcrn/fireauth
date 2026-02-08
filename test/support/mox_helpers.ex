@@ -5,4 +5,3 @@ defmodule Fireauth.Test.MoxHelpers do
     {:ok, %{status: 200, headers: [{"content-type", "text/html"}], body: body}}
   end
 end
-

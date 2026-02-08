@@ -1,0 +1,2 @@
+- Always run `mise lint` and `mise format` after code changes are completed
+- Tests need to run with `mise test` before a task is considered completed

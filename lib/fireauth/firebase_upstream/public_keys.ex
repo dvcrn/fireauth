@@ -36,23 +36,30 @@ defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
   @spec get_for_kid(String.t()) :: {:ok, String.t()} | {:error, term()}
   def get_for_kid(kid) when is_binary(kid) and kid != "" do
     with {:ok, keys} <- get_keys() do
-      case Map.get(keys, kid) do
-        pem when is_binary(pem) and pem != "" ->
-          {:ok, pem}
-
-        _ ->
-          # Key rotations can happen; force refresh once on miss.
-          with {:ok, keys2} <- refresh_keys() do
-            case Map.get(keys2, kid) do
-              pem when is_binary(pem) and pem != "" -> {:ok, pem}
-              _ -> {:error, :cert_not_found}
-            end
-          end
-      end
+      do_get_for_kid(keys, kid)
     end
   end
 
   def get_for_kid(_), do: {:error, :cert_not_found}
+
+  defp do_get_for_kid(keys, kid) do
+    case Map.get(keys, kid) do
+      pem when is_binary(pem) and pem != "" ->
+        {:ok, pem}
+
+      _ ->
+        refresh_and_retry_get_for_kid(kid)
+    end
+  end
+
+  defp refresh_and_retry_get_for_kid(kid) do
+    with {:ok, keys2} <- refresh_keys() do
+      case Map.get(keys2, kid) do
+        pem when is_binary(pem) and pem != "" -> {:ok, pem}
+        _ -> {:error, :cert_not_found}
+      end
+    end
+  end
 
   @spec get_keys() :: {:ok, map()} | {:error, term()}
   def get_keys do
@@ -65,16 +72,7 @@ defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
         if exp > now_s and map_size(keys) > 0 do
           {{keys, exp}, st}
         else
-          case fetch_keys() do
-            {:ok, keys2, ttl_s} ->
-              exp2 = now_s + ttl_s
-              {{keys2, exp2}, %{st | keys: keys2, expires_at_s: exp2}}
-
-            {:error, _reason} ->
-              # If refresh fails, keep whatever we had; shorten expiry so we retry soon.
-              retry_exp = now_s + 60
-              {{keys, retry_exp}, %{st | expires_at_s: retry_exp}}
-          end
+          refresh_state_from_fetch(st, now_s)
         end
       end)
 
@@ -82,6 +80,19 @@ defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
       {:ok, keys}
     else
       {:error, :no_keys}
+    end
+  end
+
+  defp refresh_state_from_fetch(st, now_s) do
+    case fetch_keys() do
+      {:ok, keys2, ttl_s} ->
+        exp2 = now_s + ttl_s
+        {{keys2, exp2}, %{st | keys: keys2, expires_at_s: exp2}}
+
+      {:error, _reason} ->
+        # If refresh fails, keep whatever we had; shorten expiry so we retry soon.
+        retry_exp = now_s + 60
+        {{st.keys, retry_exp}, %{st | expires_at_s: retry_exp}}
     end
   end
 
@@ -147,17 +158,8 @@ defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
     end
   end
 
-  defp cache_max_age_seconds(headers) when is_list(headers) do
-    headers
-    |> Enum.find_value(fn {k, v} ->
-      key = k |> to_string() |> String.downcase()
-      if key == "cache-control", do: parse_max_age(v), else: nil
-    end)
-  end
-
-  defp cache_max_age_seconds(%{} = headers) do
-    headers
-    |> Enum.find_value(fn {k, v} ->
+  defp cache_max_age_seconds(headers) do
+    Enum.find_value(headers, fn {k, v} ->
       key = k |> to_string() |> String.downcase()
       if key == "cache-control", do: parse_max_age(v), else: nil
     end)
@@ -196,5 +198,5 @@ defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
   defp now_s, do: System.system_time(:second)
 
   defp to_binary(data) when is_binary(data), do: data
-  defp to_binary(data) when is_list(data), do: IO.iodata_to_binary(data)
+  defp to_binary(data), do: IO.iodata_to_binary(data)
 end

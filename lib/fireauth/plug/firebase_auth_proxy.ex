@@ -13,8 +13,8 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   import Plug.Conn
 
   alias Fireauth.Config
-  alias Fireauth.FirebaseUpstream.Cache
   alias Fireauth.FirebaseUpstream
+  alias Fireauth.FirebaseUpstream.Cache
 
   @behaviour Plug
 
@@ -40,25 +40,25 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   @impl true
   def call(%Plug.Conn{} = conn, opts) do
     if conn.method in ["GET", "HEAD"] and proxied_path?(conn.request_path) do
-      key = cache_key(conn, opts)
-
-      case Process.whereis(Cache) do
-        nil ->
-          # If the cache agent isn't running (e.g. plug used without starting
-          # the :fireauth app), still serve the proxied content without caching.
-          fetch_and_serve(conn, opts, nil)
-
-        _pid ->
-          case Cache.get(key) do
-            {:hit, entry} ->
-              serve_cached(conn, entry)
-
-            :miss ->
-              fetch_and_serve(conn, opts, key)
-          end
-      end
+      do_call(conn, opts)
     else
       conn
+    end
+  end
+
+  defp do_call(conn, opts) do
+    key = cache_key(conn, opts)
+
+    case Process.whereis(Cache) do
+      nil -> fetch_and_serve(conn, opts, nil)
+      _pid -> get_from_cache_or_fetch(conn, opts, key)
+    end
+  end
+
+  defp get_from_cache_or_fetch(conn, opts, key) do
+    case Cache.get(key) do
+      {:hit, entry} -> serve_cached(conn, entry)
+      :miss -> fetch_and_serve(conn, opts, key)
     end
   end
 
@@ -98,7 +98,8 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
     with {:ok, project_id} <- fetch_project_id(opts),
          {:ok, %{status: status, headers: headers, body: body}} <-
            FirebaseUpstream.fetch(project_id, conn.request_path, query_string(conn)) do
-      content_type = content_type_from_headers(headers) || content_type_for_path(conn.request_path)
+      content_type =
+        content_type_from_headers(headers) || content_type_for_path(conn.request_path)
 
       resp_headers =
         headers
@@ -145,7 +146,8 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
     Enum.map(headers, fn {k, v} -> {to_string(k), to_string(v)} end)
   end
 
-  defp ensure_content_type(headers, content_type) when is_list(headers) and is_binary(content_type) do
+  defp ensure_content_type(headers, content_type)
+       when is_list(headers) and is_binary(content_type) do
     if Enum.any?(headers, fn {k, _v} -> String.downcase(k) == "content-type" end) do
       headers
     else
@@ -166,9 +168,15 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
 
   defp content_type_for_path(path) do
     case Path.basename(path) do
-      "handler" -> "text/html"
-      "iframe" -> "text/html"
-      "links" -> "text/html"
+      "handler" ->
+        "text/html"
+
+      "iframe" ->
+        "text/html"
+
+      "links" ->
+        "text/html"
+
       name ->
         case Path.extname(name) do
           ".js" -> "text/javascript"

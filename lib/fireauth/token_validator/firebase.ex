@@ -16,31 +16,32 @@ defmodule Fireauth.TokenValidator.Firebase do
 
   @impl true
   def verify_id_token(token, opts \\ []) when is_binary(token) and is_list(opts) do
-    with true <- looks_like_jwt?(token),
-         {:ok, header} <- peek_header(token),
+    if looks_like_jwt?(token) do
+      do_verify_id_token(token, opts)
+    else
+      {:error, :invalid_token_format}
+    end
+  end
+
+  defp do_verify_id_token(token, opts) do
+    with {:ok, header} <- peek_header(token),
          :ok <- validate_header(header),
          {:ok, kid} <- fetch_kid(header),
          {:ok, pem} <- SecureTokenPublicKeys.get_for_kid(kid),
-         {:ok, claims} <- verify_with_cert(token, pem),
-         :ok <- validate_claims(claims, opts) do
-      {:ok, Claims.new(claims)}
-    else
-      false -> {:error, :invalid_token_format}
-      {:error, _} = err -> err
-      other -> {:error, other}
+         {:ok, raw_claims} <- verify_with_cert(token, pem),
+         :ok <- validate_claims(raw_claims, opts) do
+      {:ok, Claims.new(raw_claims)}
     end
   end
 
   defp peek_header(token) do
-    try do
-      case JOSE.JWS.peek_protected(token) do
-        %JOSE.JWS{fields: fields} when is_map(fields) -> {:ok, fields}
-        binary when is_binary(binary) -> Jason.decode(binary)
-        _ -> {:error, :invalid_token}
-      end
-    rescue
+    case JOSE.JWS.peek_protected(token) do
+      binary when is_binary(binary) -> Jason.decode(binary)
+      other when is_map(other) -> {:ok, Map.get(other, :fields)}
       _ -> {:error, :invalid_token}
     end
+  rescue
+    _ -> {:error, :invalid_token}
   end
 
   defp validate_header(%{"alg" => "RS256"}), do: :ok
@@ -51,31 +52,26 @@ defmodule Fireauth.TokenValidator.Firebase do
   defp fetch_kid(_), do: {:error, :no_kid}
 
   defp verify_with_cert(token, pem) when is_binary(token) and is_binary(pem) do
-    try do
-      jwk = JOSE.JWK.from_pem(pem)
+    jwk = JOSE.JWK.from_pem(pem)
 
-      case JOSE.JWT.verify_strict(jwk, ["RS256"], token) do
-        {true, jwt, _jws} ->
-          {_fields, claims} = JOSE.JWT.to_map(jwt)
-          {:ok, claims}
+    case JOSE.JWT.verify_strict(jwk, ["RS256"], token) do
+      {true, jwt, _jws} ->
+        {_fields, claims} = JOSE.JWT.to_map(jwt)
+        {:ok, claims}
 
-        {false, _, _} ->
-          {:error, :invalid_signature}
+      {false, _, _} ->
+        {:error, :invalid_signature}
 
-        {:error, reason} ->
-          {:error, reason}
-
-        other ->
-          {:error, {:verify_error, other}}
-      end
-    rescue
-      e in [ArgumentError, ErlangError] -> {:error, {:exception, e}}
-    catch
-      :exit, reason -> {:error, {:exit, reason}}
+      _ ->
+        {:error, :invalid_signature}
     end
+  rescue
+    e in [ArgumentError, ErlangError] -> {:error, {:exception, e}}
+  catch
+    :exit, reason -> {:error, {:exit, reason}}
   end
 
-  defp validate_claims(%{} = claims, opts) do
+  defp validate_claims(claims, opts) when is_map(claims) do
     now = System.system_time(:second)
     project_id = Config.firebase_project_id(opts)
 
@@ -84,13 +80,10 @@ defmodule Fireauth.TokenValidator.Firebase do
          :ok <- require_iss(claims, project_id),
          :ok <- require_sub(claims),
          :ok <- require_exp_future(claims, now),
-         :ok <- require_iat_past(claims, now),
-         :ok <- require_auth_time_past(claims, now) do
-      :ok
+         :ok <- require_iat_past(claims, now) do
+      require_auth_time_past(claims, now)
     end
   end
-
-  defp validate_claims(_, _opts), do: {:error, :invalid_claims}
 
   defp require_project_id(project_id) when is_binary(project_id) and project_id != "",
     do: {:ok, project_id}

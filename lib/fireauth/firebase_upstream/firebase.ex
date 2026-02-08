@@ -35,11 +35,7 @@ defmodule Fireauth.FirebaseUpstream.Firebase do
     end
   end
 
-  defp headers_to_kv_list(%{} = headers) do
-    Enum.map(headers, fn {k, v} -> {to_string(k), normalize_header_value(v)} end)
-  end
-
-  defp headers_to_kv_list(headers) when is_list(headers) do
+  defp headers_to_kv_list(headers) do
     Enum.map(headers, fn {k, v} -> {to_string(k), normalize_header_value(v)} end)
   end
 

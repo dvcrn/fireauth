@@ -5,8 +5,8 @@ defmodule Fireauth.PlugTest do
   import Mox
 
   alias Fireauth.Claims
-  alias Fireauth.Plug, as: FireauthPlug
   alias Fireauth.FirebaseUpstream.Cache
+  alias Fireauth.Plug, as: FireauthPlug
 
   setup do
     Mox.set_mox_global()
@@ -62,7 +62,9 @@ defmodule Fireauth.PlugTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Bearer bad")
-      |> FireauthPlug.call(FireauthPlug.init(serve_hosted_auth?: false, on_invalid_token: :unauthorized))
+      |> FireauthPlug.call(
+        FireauthPlug.init(serve_hosted_auth?: false, on_invalid_token: :unauthorized)
+      )
 
     assert conn.halted
     assert conn.status == 401
@@ -72,7 +74,8 @@ defmodule Fireauth.PlugTest do
     :ok = Cache.clear()
 
     expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/handler", nil ->
-      {:ok, %{status: 200, headers: [{"content-type", "text/html"}], body: "<html>handler</html>"}}
+      {:ok,
+       %{status: 200, headers: [{"content-type", "text/html"}], body: "<html>handler</html>"}}
     end)
 
     conn =

@@ -47,4 +47,3 @@ defmodule Fireauth.Plug.HostedAuthFiles do
     end
   end
 end
-

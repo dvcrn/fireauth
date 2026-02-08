@@ -9,15 +9,14 @@ defmodule Fireauth.Config do
   end
 
   @spec firebase_project_id(keyword()) :: String.t() | nil
-  def firebase_project_id(opts \\ []) when is_list(opts) do
-    cond do
-      is_binary(Keyword.get(opts, :project_id)) and Keyword.get(opts, :project_id) != "" ->
-        Keyword.get(opts, :project_id)
 
-      true ->
-        otp_app = otp_app(opts)
-        Application.get_env(otp_app, :firebase_project_id) || System.get_env("FIREBASE_PROJECT_ID")
+  def firebase_project_id(opts \\ []) when is_list(opts) do
+    if is_binary(Keyword.get(opts, :project_id)) and Keyword.get(opts, :project_id) != "" do
+      Keyword.get(opts, :project_id)
+    else
+      otp_app = otp_app(opts)
+
+      Application.get_env(otp_app, :firebase_project_id) || System.get_env("FIREBASE_PROJECT_ID")
     end
   end
 end
-

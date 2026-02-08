@@ -39,7 +39,9 @@ defmodule Fireauth.TokenVerificationTest do
     }
 
     jwk = JOSE.JWK.generate_key({:oct, 32})
-    {_, token} = JOSE.JWT.sign(jwk, %{"alg" => "HS256", "kid" => "kid"}, claims) |> JOSE.JWS.compact()
+
+    {_, token} =
+      JOSE.JWT.sign(jwk, %{"alg" => "HS256", "kid" => "kid"}, claims) |> JOSE.JWS.compact()
 
     assert {:error, :invalid_alg} = Fireauth.verify_id_token(token, project_id: "test-proj")
   end
@@ -60,7 +62,9 @@ defmodule Fireauth.TokenVerificationTest do
 
     kid = "test-kid-" <> Integer.to_string(:rand.uniform(1_000_000))
     jwk = JOSE.JWK.generate_key({:rsa, 2048})
-    {_, token} = JOSE.JWT.sign(jwk, %{"alg" => "RS256", "kid" => kid}, claims) |> JOSE.JWS.compact()
+
+    {_, token} =
+      JOSE.JWT.sign(jwk, %{"alg" => "RS256", "kid" => kid}, claims) |> JOSE.JWS.compact()
 
     # Stash the private key in the process dictionary so we can derive public pem later.
     Process.put({__MODULE__, :last_jwk}, jwk)
@@ -74,4 +78,3 @@ defmodule Fireauth.TokenVerificationTest do
     pem
   end
 end
-

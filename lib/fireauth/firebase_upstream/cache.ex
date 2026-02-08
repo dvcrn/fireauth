@@ -29,19 +29,27 @@ defmodule Fireauth.FirebaseUpstream.Cache do
     now = now_ms()
 
     Agent.get(__MODULE__, fn cache ->
-      case Map.get(cache, key) do
-        %{} = entry ->
-          if expired?(entry, now) do
-            :miss
-          else
-            Logger.debug("fireauth: cache hit for #{inspect(key)}")
-            {:hit, entry}
-          end
-
-        _ ->
-          :miss
-      end
+      check_cache(cache, key, now)
     end)
+  end
+
+  defp check_cache(cache, key, now) do
+    case Map.get(cache, key) do
+      %{} = entry ->
+        validate_entry(entry, key, now)
+
+      _ ->
+        :miss
+    end
+  end
+
+  defp validate_entry(entry, key, now) do
+    if expired?(entry, now) do
+      :miss
+    else
+      Logger.debug("fireauth: cache hit for #{inspect(key)}")
+      {:hit, entry}
+    end
   end
 
   @spec put(key(), entry()) :: :ok
