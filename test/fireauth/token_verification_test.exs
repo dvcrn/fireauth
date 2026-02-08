@@ -1,15 +1,9 @@
 defmodule Fireauth.TokenVerificationTest do
   use ExUnit.Case
 
-  alias Fireauth.SecureTokenPublicKeys
+  alias Fireauth.FirebaseUpstream.SecureTokenPublicKeys
 
   setup do
-    # Ensure the keystore agent is running (in case tests are run with --no-start).
-    case Process.whereis(SecureTokenPublicKeys) do
-      nil -> start_supervised!({SecureTokenPublicKeys, []})
-      _pid -> :ok
-    end
-
     :ok
   end
 
@@ -76,7 +70,8 @@ defmodule Fireauth.TokenVerificationTest do
   defp public_pem_for_token(_token) do
     jwk = Process.get({__MODULE__, :last_jwk})
     jwk_pub = JOSE.JWK.to_public(jwk)
-    JOSE.JWK.to_pem(jwk_pub)
+    {_fields, pem} = JOSE.JWK.to_pem(jwk_pub)
+    pem
   end
 end
 

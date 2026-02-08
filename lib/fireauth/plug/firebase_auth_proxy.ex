@@ -13,7 +13,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   import Plug.Conn
 
   alias Fireauth.Config
-  alias Fireauth.FirebaseUpstreamCache
+  alias Fireauth.FirebaseUpstream.Cache
   alias Fireauth.FirebaseUpstream
 
   @behaviour Plug
@@ -42,14 +42,14 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
     if conn.method in ["GET", "HEAD"] and proxied_path?(conn.request_path) do
       key = cache_key(conn, opts)
 
-      case Process.whereis(FirebaseUpstreamCache) do
+      case Process.whereis(Cache) do
         nil ->
           # If the cache agent isn't running (e.g. plug used without starting
           # the :fireauth app), still serve the proxied content without caching.
           fetch_and_serve(conn, opts, nil)
 
         _pid ->
-          case FirebaseUpstreamCache.get(key) do
+          case Cache.get(key) do
             {:hit, entry} ->
               serve_cached(conn, entry)
 
@@ -109,7 +109,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
       if status == 200 and not is_nil(key_or_nil) do
         ttl_ms = Keyword.get(opts, :firebase_cache_ttl_ms, @default_cache_ttl_ms)
 
-        FirebaseUpstreamCache.put(key_or_nil, %{
+        Cache.put(key_or_nil, %{
           status: status,
           headers: resp_headers,
           body: body,

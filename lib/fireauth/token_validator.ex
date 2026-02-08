@@ -10,7 +10,7 @@ defmodule Fireauth.TokenValidator do
   Configure via:
 
   ```elixir
-  config :fireauth, :token_validator_adapter, Fireauth.FirebaseTokenValidator
+  config :fireauth, :token_validator_adapter, Fireauth.TokenValidator.Firebase
   ```
   """
 
@@ -26,7 +26,6 @@ defmodule Fireauth.TokenValidator do
   end
 
   defp adapter do
-    Application.get_env(:fireauth, :token_validator_adapter, Fireauth.FirebaseTokenValidator)
+    Application.get_env(:fireauth, :token_validator_adapter, Fireauth.TokenValidator.Firebase)
   end
 end
-

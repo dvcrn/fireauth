@@ -1,4 +1,4 @@
-defmodule Fireauth.FirebaseTokenValidator do
+defmodule Fireauth.TokenValidator.Firebase do
   @moduledoc """
   Firebase SecureToken ID token validator.
 
@@ -9,7 +9,7 @@ defmodule Fireauth.FirebaseTokenValidator do
   @behaviour Fireauth.TokenValidator
 
   alias Fireauth.Config
-  alias Fireauth.SecureTokenPublicKeys
+  alias Fireauth.FirebaseUpstream.SecureTokenPublicKeys
 
   @type claims :: %{optional(String.t()) => term()}
 
@@ -34,6 +34,7 @@ defmodule Fireauth.FirebaseTokenValidator do
     try do
       case JOSE.JWS.peek_protected(token) do
         %JOSE.JWS{fields: fields} when is_map(fields) -> {:ok, fields}
+        binary when is_binary(binary) -> Jason.decode(binary)
         _ -> {:error, :invalid_token}
       end
     rescue
@@ -122,4 +123,3 @@ defmodule Fireauth.FirebaseTokenValidator do
     length(String.split(token, ".", parts: 4)) == 3
   end
 end
-

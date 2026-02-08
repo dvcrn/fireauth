@@ -1,4 +1,4 @@
-defmodule Fireauth.FirebaseUpstreamCache do
+defmodule Fireauth.FirebaseUpstream.Cache do
   @moduledoc """
   In-memory cache for Firebase hosted auth helper files.
 
@@ -7,6 +7,8 @@ defmodule Fireauth.FirebaseUpstreamCache do
   """
 
   use Agent
+
+  require Logger
 
   @type key :: {String.t(), String.t(), String.t() | nil}
 
@@ -32,6 +34,7 @@ defmodule Fireauth.FirebaseUpstreamCache do
           if expired?(entry, now) do
             :miss
           else
+            Logger.debug("fireauth: cache hit for #{inspect(key)}")
             {:hit, entry}
           end
 

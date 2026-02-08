@@ -4,7 +4,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
 
   import Mox
 
-  alias Fireauth.FirebaseUpstreamCache
+  alias Fireauth.FirebaseUpstream.Cache
   alias Fireauth.Plug.FirebaseAuthProxy
 
   setup :verify_on_exit!
@@ -17,7 +17,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
   setup do
     Mox.set_mox_global()
     Application.put_env(:fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstreamMock)
-    start_supervised!({Fireauth.FirebaseUpstreamCache, []})
+    Cache.clear()
 
     on_exit(fn ->
       Application.delete_env(:fireauth, :firebase_upstream_adapter)
@@ -27,12 +27,12 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
   end
 
   test "serves proxied paths from cache when present" do
-    :ok = FirebaseUpstreamCache.clear()
+    :ok = Cache.clear()
 
     conn = conn(:get, "/__/auth/handler")
     key = {"myproj", "/__/auth/handler", nil}
 
-    FirebaseUpstreamCache.put(key, %{
+    Cache.put(key, %{
       status: 200,
       headers: [{"content-type", "text/html"}],
       body: "<html>ok</html>",
@@ -50,7 +50,7 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
   end
 
   test "cache miss calls upstream adapter and caches the response (and receives project id)" do
-    :ok = FirebaseUpstreamCache.clear()
+    :ok = Cache.clear()
 
     expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/handler", "x=1" ->
       {:ok,
@@ -83,12 +83,12 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
   end
 
   test "proxies /__/firebase/init.json from cache when present" do
-    :ok = FirebaseUpstreamCache.clear()
+    :ok = Cache.clear()
 
     conn = conn(:get, "/__/firebase/init.json")
     key = {"myproj", "/__/firebase/init.json", nil}
 
-    FirebaseUpstreamCache.put(key, %{
+    Cache.put(key, %{
       status: 200,
       headers: [{"content-type", "application/json"}],
       body: ~s({"ok":true}),

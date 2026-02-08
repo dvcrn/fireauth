@@ -5,12 +5,13 @@ defmodule Fireauth.PlugTest do
   import Mox
 
   alias Fireauth.Plug, as: FireauthPlug
+  alias Fireauth.FirebaseUpstream.Cache
 
   setup do
     Mox.set_mox_global()
     Application.put_env(:fireauth, :token_validator_adapter, Fireauth.TokenValidatorMock)
     Application.put_env(:fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstreamMock)
-    start_supervised!({Fireauth.FirebaseUpstreamCache, []})
+    Cache.clear()
 
     on_exit(fn ->
       Application.delete_env(:fireauth, :token_validator_adapter)
@@ -62,7 +63,7 @@ defmodule Fireauth.PlugTest do
   end
 
   test "proxies firebase hosted auth helper files (no token validation)" do
-    :ok = Fireauth.FirebaseUpstreamCache.clear()
+    :ok = Cache.clear()
 
     expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/handler", nil ->
       {:ok, %{status: 200, headers: [{"content-type", "text/html"}], body: "<html>handler</html>"}}

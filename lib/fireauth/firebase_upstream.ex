@@ -7,7 +7,7 @@ defmodule Fireauth.FirebaseUpstream do
 
   Configure the adapter via:
 
-  `config :fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstream.Req`
+  `config :fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstream.Firebase`
   """
 
   @type headers :: [{String.t(), String.t()}]
@@ -32,6 +32,6 @@ defmodule Fireauth.FirebaseUpstream do
   defp normalize_path(path) when is_binary(path), do: "/" <> path
 
   defp adapter do
-    Application.get_env(:fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstream.Req)
+    Application.get_env(:fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstream.Firebase)
   end
 end

@@ -1,12 +1,15 @@
-defmodule Fireauth.FirebaseUpstream.Req do
+defmodule Fireauth.FirebaseUpstream.Firebase do
   @moduledoc false
 
   @behaviour Fireauth.FirebaseUpstream
+
+  require Logger
 
   @impl true
   def fetch(project_id, path, query_string)
       when is_binary(project_id) and is_binary(path) do
     url = build_url(project_id, path, query_string)
+    Logger.debug("fireauth: fetching upstream #{url}")
 
     case Req.get(url, decode_body: false, redirect: true) do
       {:ok, %{status: status, headers: headers, body: body}} ->

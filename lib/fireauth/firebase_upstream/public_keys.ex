@@ -1,4 +1,4 @@
-defmodule Fireauth.SecureTokenPublicKeys do
+defmodule Fireauth.FirebaseUpstream.SecureTokenPublicKeys do
   @moduledoc """
   Caches the Google SecureToken public keys used to verify Firebase ID tokens.
 
@@ -60,7 +60,7 @@ defmodule Fireauth.SecureTokenPublicKeys do
 
     now_s = now_s()
 
-    {keys, expires_at_s} =
+    {keys, _expires_at_s} =
       Agent.get_and_update(__MODULE__, fn %{keys: keys, expires_at_s: exp} = st ->
         if exp > now_s and map_size(keys) > 0 do
           {{keys, exp}, st}
@@ -89,8 +89,9 @@ defmodule Fireauth.SecureTokenPublicKeys do
   def refresh_keys do
     ensure_started!()
     now_s = now_s()
+    Logger.debug("fireauth: refreshing Firebase SecureToken public keys")
 
-    Agent.get_and_update(__MODULE__, fn %{keys: keys} = st ->
+    Agent.get_and_update(__MODULE__, fn %{keys: _keys} = st ->
       case fetch_keys() do
         {:ok, keys2, ttl_s} ->
           exp2 = now_s + ttl_s
@@ -108,28 +109,29 @@ defmodule Fireauth.SecureTokenPublicKeys do
   end
 
   defp init_state(_opts) do
-    if Application.get_env(:fireauth, :prefetch_public_keys, true) do
-      Logger.info("fireauth: downloading Firebase SecureToken public keys")
+    Logger.debug("fireauth: prefetching Firebase SecureToken public keys")
 
-      case fetch_keys() do
-        {:ok, keys, ttl_s} ->
-          Logger.info(
-            "fireauth: downloaded Firebase SecureToken public keys count=#{map_size(keys)} ttl_seconds=#{ttl_s}"
-          )
+    case fetch_keys() do
+      {:ok, keys, ttl_s} ->
+        Logger.info(
+          "fireauth: downloaded Firebase SecureToken public keys count=#{map_size(keys)} ttl_seconds=#{ttl_s}"
+        )
 
-          now_s = now_s()
-          %{keys: keys, expires_at_s: now_s + ttl_s}
+        now_s = now_s()
+        %{keys: keys, expires_at_s: now_s + ttl_s}
 
-        {:error, reason} ->
-          Logger.warning("fireauth: failed to download Firebase SecureToken public keys reason=#{inspect(reason)}")
-          %{keys: %{}, expires_at_s: 0}
-      end
-    else
-      %{keys: %{}, expires_at_s: 0}
+      {:error, reason} ->
+        Logger.warning(
+          "fireauth: failed to download Firebase SecureToken public keys reason=#{inspect(reason)}"
+        )
+
+        %{keys: %{}, expires_at_s: 0}
     end
   end
 
   defp fetch_keys do
+    Logger.debug("fireauth: downloading public keys from #{@x509_url}")
+
     case Req.get(@x509_url, decode_body: false, redirect: true) do
       {:ok, %{status: 200, headers: headers, body: body}} ->
         with {:ok, keys} <- Jason.decode(to_binary(body)) do
@@ -183,8 +185,11 @@ defmodule Fireauth.SecureTokenPublicKeys do
 
   defp ensure_started! do
     case Process.whereis(__MODULE__) do
-      nil -> raise "Fireauth.SecureTokenPublicKeys is not started (start the :fireauth application)"
-      _pid -> :ok
+      nil ->
+        raise "Fireauth.FirebaseUpstream.SecureTokenPublicKeys is not started (start the :fireauth application)"
+
+      _pid ->
+        :ok
     end
   end
 
