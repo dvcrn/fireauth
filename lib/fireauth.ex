@@ -41,14 +41,14 @@ defmodule Fireauth do
   @doc """
   Get the first identity ID for the given provider from a user or claims.
   """
-  @spec get_identity(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) ::
+  @spec identity(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) ::
           String.t() | nil
-  def get_identity(%{identities: identities}, provider) when is_map(identities) do
+  def identity(%{identities: identities}, provider) when is_map(identities) do
     case Map.get(identities, to_string(provider)) do
       [id | _] -> id
       _ -> nil
     end
   end
 
-  def get_identity(_data, _provider), do: nil
+  def identity(_data, _provider), do: nil
 end

@@ -12,7 +12,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your mix.exs
 
 ```
-{:fireauth, "~> 0.1.0"},
+{:fireauth, "~> 0.1.1"},
 ```
 
 Set your Firebase project id:
@@ -32,8 +32,8 @@ Or via env var: `FIREBASE_PROJECT_ID`.
 user = Fireauth.User.from_claims(claims)
 
 # Check for specific identities (works with both claims and user structs)
-if Fireauth.has_identity?(user, :google) do
-  google_uid = Fireauth.get_identity(user, "google.com")
+if Fireauth.has_identity?(user, "google.com") do
+  google_uid = Fireauth.identity(user, "google.com")
 end
 ```
 
