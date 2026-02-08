@@ -2,13 +2,18 @@
 
 Firebase Auth helpers for Elixir apps:
 
-- Verify Firebase ID tokens (RS256) using Google's SecureToken x509 certs
+- Verify Firebase ID tokens (RS256) using Google's SecureToken x509 certs.
 - Optional Plug middleware that:
-  - Proxies Firebase hosted auth helper files at `GET /__/auth/*` and `GET /__/firebase/init.json`
-    (transparent reverse proxy to `https://<project>.firebaseapp.com`)
-  - Validates `Authorization: Bearer <id_token>` (if present) and attaches claims to `conn.assigns`
+  - Proxies or serves Firebase auth helper files at `/__/auth/*` and `/__/firebase/init.json` to support redirect-based auth on your own domain.
+  - Validates `Authorization: Bearer <id_token>` and attaches `%Fireauth.Claims{}` and `%Fireauth.User{}` to `conn.assigns`.
 
 ## Configuration
+
+Add to your mix.exs
+
+```
+{:fireauth, "~> 0.1.0"},
+```
 
 Set your Firebase project id:
 
@@ -18,36 +23,59 @@ config :fireauth, firebase_project_id: "your-project-id"
 
 Or via env var: `FIREBASE_PROJECT_ID`.
 
-Token validation uses an adapter (default `Fireauth.FirebaseTokenValidator`):
-
-```elixir
-config :fireauth, :token_validator_adapter, Fireauth.FirebaseTokenValidator
-```
-
-On application start, `:fireauth` will prefetch Google's SecureToken public keys
-and log download status. You can disable the prefetch with:
-
-```elixir
-config :fireauth, :prefetch_public_keys, false
-```
-
 ## Usage
 
-Verify a token:
+### Token Verification & Identity Helpers
 
 ```elixir
 {:ok, claims} = Fireauth.verify_id_token(id_token)
-attrs = Fireauth.claims_to_user_attrs(claims)
+user = Fireauth.User.from_claims(claims)
+
+# Check for specific identities (works with both claims and user structs)
+if Fireauth.has_identity?(user, :google) do
+  google_uid = Fireauth.get_identity(user, "google.com")
+end
 ```
 
-Plug into a Phoenix endpoint (before `Plug.Static`):
+### Plug Integration
+
+Add `Fireauth.Plug` to your pipeline. It handles both auth file proxying and token verification.
 
 ```elixir
-plug Fireauth.Plug
-plug Plug.Static, ...
+defmodule MyRouter do
+  use Plug.Router
+
+  plug :match
+
+  plug Fireauth.Plug,
+    project_id: "your-project-id",
+    # :proxy (default) fetches from firebaseapp.com. :static serves local copies.
+    hosted_auth_mode: :proxy,
+    # :unauthorized returns 401. :ignore (default) just skips assignment.
+    on_invalid_token: :unauthorized
+
+  plug :dispatch
+
+  get "/protected" do
+    # Read derived user or raw claims from assigns
+    %{user_attrs: user, claims: claims} = conn.assigns.fireauth
+
+    send_resp(conn, 200, "Welcome #{user.email}")
+  end
+end
 ```
 
-Then read:
+### Hosted Auth Modes
 
-- `conn.assigns.fireauth.claims`
-- `conn.assigns.fireauth.user_attrs`
+To support redirect-mode auth in modern browsers (avoiding third-party cookie issues), you must serve Firebase's helper files from your own domain.
+
+1. **`:proxy` (Default):** Transparently proxies requests to `https://<project>.firebaseapp.com`. This is the most robust method. Responses are cached in-memory.
+2. **`:static`:** Serves local copies of the helper files embedded in the `fireauth` library. Use this if your environment cannot make outbound requests to Firebase at runtime.
+
+### Caching
+
+This library caches all `/__/auth/*` calls in addition to the Google public key
+
+## License
+
+MIT

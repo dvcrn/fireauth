@@ -14,9 +14,9 @@ defmodule Fireauth.TokenVerificationTest do
     SecureTokenPublicKeys.put_keys(%{kid => public_pem_for_token(token)}, 3600)
 
     assert {:ok, claims} = Fireauth.verify_id_token(token, project_id: "test-proj")
-    assert claims["aud"] == "test-proj"
-    assert claims["iss"] == "https://securetoken.google.com/test-proj"
-    assert is_binary(claims["sub"]) and claims["sub"] != ""
+    assert claims.aud == "test-proj"
+    assert claims.iss == "https://securetoken.google.com/test-proj"
+    assert is_binary(claims.sub) and claims.sub != ""
   end
 
   test "rejects invalid audience" do

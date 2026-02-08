@@ -4,6 +4,7 @@ defmodule Fireauth.PlugTest do
 
   import Mox
 
+  alias Fireauth.Claims
   alias Fireauth.Plug, as: FireauthPlug
   alias Fireauth.FirebaseUpstream.Cache
 
@@ -24,7 +25,12 @@ defmodule Fireauth.PlugTest do
   setup :verify_on_exit!
 
   test "assigns verified claims when bearer token is present" do
-    claims = %{"sub" => "uid", "aud" => "proj", "iss" => "https://securetoken.google.com/proj"}
+    claims = %Claims{
+      sub: "uid",
+      aud: "proj",
+      iss: "https://securetoken.google.com/proj",
+      identities: %{}
+    }
 
     expect(Fireauth.TokenValidatorMock, :verify_id_token, fn "tok", _opts ->
       {:ok, claims}
@@ -37,7 +43,7 @@ defmodule Fireauth.PlugTest do
 
     assert conn.assigns.fireauth.claims == claims
     assert conn.assigns.fireauth.token == "tok"
-    assert is_map(conn.assigns.fireauth.user_attrs)
+    assert %Fireauth.User{} = conn.assigns.fireauth.user_attrs
   end
 
   test "does nothing when bearer token is absent" do

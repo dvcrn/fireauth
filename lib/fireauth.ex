@@ -7,10 +7,10 @@ defmodule Fireauth do
     and proxies Firebase hosted auth helper files at `/__/auth/*`.
   """
 
-  alias Fireauth.{Firebase, TokenValidator}
+  alias Fireauth.{Claims, TokenValidator}
 
   @type id_token :: String.t()
-  @type claims :: %{optional(String.t()) => term()}
+  @type claims :: Claims.t()
 
   @doc """
   Verify a Firebase ID token and return its claims.
@@ -25,6 +25,30 @@ defmodule Fireauth do
   @doc """
   Convert verified Firebase claims into the common user attrs map.
   """
-  @spec claims_to_user_attrs(claims()) :: map()
-  def claims_to_user_attrs(%{} = claims), do: Firebase.claims_to_user_attrs(claims)
+  @spec claims_to_user_attrs(claims()) :: Fireauth.User.t()
+  def claims_to_user_attrs(%Claims{} = claims), do: Fireauth.User.from_claims(claims)
+
+  @doc """
+  Check if the given user or claims has an identity for the specified provider.
+  """
+  @spec has_identity?(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) :: boolean()
+  def has_identity?(%{identities: identities}, provider) when is_map(identities) do
+    Map.has_key?(identities, to_string(provider))
+  end
+
+  def has_identity?(_data, _provider), do: false
+
+  @doc """
+  Get the first identity ID for the given provider from a user or claims.
+  """
+  @spec get_identity(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) ::
+          String.t() | nil
+  def get_identity(%{identities: identities}, provider) when is_map(identities) do
+    case Map.get(identities, to_string(provider)) do
+      [id | _] -> id
+      _ -> nil
+    end
+  end
+
+  def get_identity(_data, _provider), do: nil
 end

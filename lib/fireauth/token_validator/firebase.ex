@@ -8,10 +8,11 @@ defmodule Fireauth.TokenValidator.Firebase do
 
   @behaviour Fireauth.TokenValidator
 
+  alias Fireauth.Claims
   alias Fireauth.Config
   alias Fireauth.FirebaseUpstream.SecureTokenPublicKeys
 
-  @type claims :: %{optional(String.t()) => term()}
+  @type claims :: Claims.t()
 
   @impl true
   def verify_id_token(token, opts \\ []) when is_binary(token) and is_list(opts) do
@@ -22,7 +23,7 @@ defmodule Fireauth.TokenValidator.Firebase do
          {:ok, pem} <- SecureTokenPublicKeys.get_for_kid(kid),
          {:ok, claims} <- verify_with_cert(token, pem),
          :ok <- validate_claims(claims, opts) do
-      {:ok, claims}
+      {:ok, Claims.new(claims)}
     else
       false -> {:error, :invalid_token_format}
       {:error, _} = err -> err

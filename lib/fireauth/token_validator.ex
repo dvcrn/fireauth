@@ -15,7 +15,7 @@ defmodule Fireauth.TokenValidator do
   """
 
   @type id_token :: String.t()
-  @type claims :: %{optional(String.t()) => term()}
+  @type claims :: Fireauth.Claims.t()
   @type opts :: keyword()
 
   @callback verify_id_token(id_token(), opts()) :: {:ok, claims()} | {:error, term()}

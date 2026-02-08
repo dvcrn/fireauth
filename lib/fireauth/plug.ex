@@ -35,9 +35,15 @@ defmodule Fireauth.Plug do
     conn =
       if Keyword.get(opts, :serve_hosted_auth?, true) do
         case Keyword.get(opts, :hosted_auth_mode, :proxy) do
-          :proxy -> FirebaseAuthProxy.call(conn, opts)
-          :static -> HostedAuthFiles.call(conn, opts)
-          _ -> conn
+          :proxy ->
+            conn = FirebaseAuthProxy.call(conn, opts)
+            if conn.halted, do: conn, else: HostedAuthFiles.call(conn, opts)
+
+          :static ->
+            HostedAuthFiles.call(conn, opts)
+
+          _ ->
+            conn
         end
       else
         conn
