@@ -35,11 +35,9 @@ defmodule Fireauth.TokenValidator.Firebase do
   end
 
   defp peek_header(token) do
-    case JOSE.JWS.peek_protected(token) do
-      binary when is_binary(binary) -> Jason.decode(binary)
-      other when is_map(other) -> {:ok, Map.get(other, :fields)}
-      _ -> {:error, :invalid_token}
-    end
+    token
+    |> JOSE.JWS.peek_protected()
+    |> Jason.decode()
   rescue
     _ -> {:error, :invalid_token}
   end
@@ -59,10 +57,7 @@ defmodule Fireauth.TokenValidator.Firebase do
         {_fields, claims} = JOSE.JWT.to_map(jwt)
         {:ok, claims}
 
-      {false, _, _} ->
-        {:error, :invalid_signature}
-
-      _ ->
+      {false, _jwt, _jws} ->
         {:error, :invalid_signature}
     end
   rescue
