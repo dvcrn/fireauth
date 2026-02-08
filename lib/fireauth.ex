@@ -3,6 +3,7 @@ defmodule Fireauth do
   Fireauth is a small library for Firebase Auth integration:
 
   - `Fireauth.verify_id_token/2` verifies Firebase SecureToken ID tokens.
+  - `Fireauth.create_session_cookie/2` mints Firebase session cookies (requires admin service account).
   - `Fireauth.Plug` optionally attaches verified claims to `conn.assigns`
     and proxies Firebase hosted auth helper files at `/__/auth/*`.
   """
@@ -20,6 +21,27 @@ defmodule Fireauth do
   @spec verify_id_token(id_token(), keyword()) :: {:ok, claims()} | {:error, term()}
   def verify_id_token(token, opts \\ []) when is_binary(token) and is_list(opts) do
     TokenValidator.verify_id_token(token, opts)
+  end
+
+  @doc """
+  Verify a Firebase session cookie and return its claims.
+  """
+  @spec verify_session_cookie(String.t(), keyword()) :: {:ok, claims()} | {:error, term()}
+  def verify_session_cookie(cookie, opts \\ []) when is_binary(cookie) and is_list(opts) do
+    Fireauth.SessionCookieValidator.verify_session_cookie(cookie, opts)
+  end
+
+  @doc """
+  Exchange an ID token for a Firebase session cookie.
+
+  This makes a network call to Google (Identity Toolkit
+  `projects.createSessionCookie`). It requires a Firebase Admin service account
+  (OAuth).
+  """
+  @spec create_session_cookie(id_token(), keyword()) ::
+          {:ok, Fireauth.SessionCookie.session_cookie()} | {:error, term()}
+  def create_session_cookie(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
+    Fireauth.SessionCookie.exchange_id_token(id_token, opts)
   end
 
   @doc """

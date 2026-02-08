@@ -7,6 +7,7 @@ defmodule Fireauth.Application do
   def start(_type, _args) do
     children = [
       {Fireauth.FirebaseUpstream.SecureTokenPublicKeys, []},
+      {Fireauth.FirebaseUpstream.IdentityToolkitPublicKeys, []},
       {Fireauth.FirebaseUpstream.Cache, []}
     ]
 

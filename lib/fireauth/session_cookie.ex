@@ -2,8 +2,9 @@ defmodule Fireauth.SessionCookie do
   @moduledoc """
   Mint Firebase Auth session cookies using a Firebase Admin service account.
 
-  This calls the Google Identity Toolkit API `projects.createSessionCookie`,
-  which requires OAuth (service account credentials).
+  This performs a network call to Google's Identity Toolkit API
+  (`projects.createSessionCookie`), which requires OAuth (service account
+  credentials).
   """
 
   alias Fireauth.Admin.OAuth
@@ -18,14 +19,17 @@ defmodule Fireauth.SessionCookie do
   @doc """
   Exchange a Firebase ID token for a Firebase session cookie.
 
+  This makes a network call to Google to exchange the given ID token for a
+  session cookie.
+
   Options:
 
   - `:project_id` - Firebase project id (falls back to config/env/service account project_id)
   - `:valid_duration_s` - cookie lifetime in seconds (300..1_209_600). Default: 432_000 (5 days).
   - `:firebase_admin_service_account` - map or JSON string (or base64 JSON). Falls back to config/env.
   """
-  @spec create(id_token(), keyword()) :: {:ok, session_cookie()} | {:error, term()}
-  def create(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
+  @spec exchange_id_token(id_token(), keyword()) :: {:ok, session_cookie()} | {:error, term()}
+  def exchange_id_token(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
     valid_duration_s = Keyword.get(opts, :valid_duration_s, 60 * 60 * 24 * 5)
 
     with :ok <- validate_duration(valid_duration_s),
