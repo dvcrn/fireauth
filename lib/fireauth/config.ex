@@ -6,6 +6,7 @@ defmodule Fireauth.Config do
   alias Fireauth.Admin.ServiceAccount
 
   @type service_account :: map()
+  @type firebase_web_config :: map()
 
   @spec otp_app(keyword()) :: atom()
   def otp_app(opts) when is_list(opts) do
@@ -37,5 +38,32 @@ defmodule Fireauth.Config do
       {:ok, sa} -> sa
       {:error, _reason} -> nil
     end
+  end
+
+  @spec firebase_web_config(keyword()) :: firebase_web_config() | nil
+  def firebase_web_config(opts \\ []) when is_list(opts) do
+    otp_app = otp_app(opts)
+
+    cfg =
+      Keyword.get(opts, :firebase_web_config) ||
+        Application.get_env(otp_app, :firebase_web_config) ||
+        default_web_config_from_env()
+
+    if is_map(cfg) do
+      cfg
+    else
+      nil
+    end
+  end
+
+  defp default_web_config_from_env do
+    %{
+      "apiKey" => System.get_env("FIREBASE_API_KEY"),
+      "authDomain" => System.get_env("FIREBASE_AUTH_DOMAIN"),
+      "projectId" => System.get_env("FIREBASE_PROJECT_ID"),
+      "storageBucket" => System.get_env("FIREBASE_STORAGE_BUCKET"),
+      "messagingSenderId" => System.get_env("FIREBASE_MESSAGING_SENDER_ID"),
+      "appId" => System.get_env("FIREBASE_APP_ID")
+    }
   end
 end

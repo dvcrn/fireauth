@@ -24,6 +24,14 @@ defmodule Fireauth.Plug.SessionCookie do
   @impl true
   def call(conn, opts) do
     conn = fetch_cookies(conn)
+    assigns_key = Keyword.fetch!(opts, :assigns_key)
+
+    conn =
+      if Map.has_key?(conn.assigns, assigns_key) do
+        conn
+      else
+        assign(conn, assigns_key, %Fireauth{user: nil, claims: nil, token: nil})
+      end
 
     case cookie_value(conn, opts) do
       nil ->
@@ -44,10 +52,12 @@ defmodule Fireauth.Plug.SessionCookie do
       {:ok, claims} ->
         assigns_key = Keyword.fetch!(opts, :assigns_key)
 
-        fireauth = %{
+        user_attrs = Fireauth.claims_to_user_attrs(claims)
+
+        fireauth = %Fireauth{
           token: cookie,
           claims: claims,
-          user_attrs: Fireauth.claims_to_user_attrs(claims)
+          user: user_attrs
         }
 
         assign(conn, assigns_key, fireauth)

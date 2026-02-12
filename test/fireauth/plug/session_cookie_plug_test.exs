@@ -47,7 +47,7 @@ defmodule Fireauth.Plug.SessionCookiePlugTest do
 
     assert conn.assigns.fireauth.token == cookie
     assert conn.assigns.fireauth.claims.iss == "https://session.firebase.google.com/test-proj"
-    assert %Fireauth.User{} = conn.assigns.fireauth.user_attrs
+    assert %Fireauth.User{} = conn.assigns.fireauth.user
   end
 
   test "on_invalid_cookie :unauthorized returns 401" do

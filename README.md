@@ -11,7 +11,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your mix.exs
 
 ```
-{:fireauth, "~> 0.2.0"},
+{:fireauth, "~> 0.3.0"},
 ```
 
 ## Two Ways To Use This Library
@@ -45,7 +45,7 @@ defmodule MyApp.Router do
 
   get "/protected" do
     case conn.assigns[:fireauth] do
-      %{claims: claims, user_attrs: user} ->
+      %{claims: claims, user: user} ->
         json(conn, 200, %{
           "uid" => user.firebase_uid,
           "email" => user.email,
@@ -116,7 +116,7 @@ defmodule MyApp.Router do
 
   get "/protected" do
     case conn.assigns[:fireauth] do
-      %{claims: claims, user_attrs: user} ->
+      %{claims: claims, user: user} ->
         json(conn, 200, %{
           "uid" => user.firebase_uid,
           "email" => user.email,
@@ -207,6 +207,131 @@ plug Fireauth.Plug,
   hosted_auth_mode: :proxy,
   # Optional if you set `config :fireauth, firebase_project_id: "..."` (or `FIREBASE_PROJECT_ID`).
   project_id: "your-project-id"
+```
+
+### Redirect-Mode Client Helper (Optional)
+
+Fireauth ships a JavaScript helper via `Fireauth.Snippets.client/1` to make this flow easier:
+
+1. Redirect the user to a `/start/` page with POST: Starts firebase auth flow, redirects to oauth screen, etc
+2. Firebase redirects back to the `/start/` with GET: Show loading indicator, exchange idToken for session cookie, redirect to main page
+
+It exposes:
+
+- `window.fireauth.start(opts, callback)`:
+  - sets localStorage flow markers
+  - then executes your callback to start Firebase redirect
+- `window.fireauth.verify(opts, callback)`:
+  - checks localStorage flow markers
+  - resolves `idToken`
+  - exchanges `idToken` for session cookie
+  - redirects to `return_to`
+  - supports chaining: `.success(...).error(...).onStateChange(...)`
+
+Optional UI integration:
+
+- `window.fireauth.onStateChange/1`, `window.fireauth.onError/1`, `window.fireauth.onSuccess/1`
+
+#### Server Setup
+
+1. Ensure hosted auth files are served at the endpoint level (so `/__/auth/handler` is not a 404):
+
+```elixir
+# In your Endpoint (Phoenix) or top-level Plug stack (Plug.Router),
+# before your router.
+plug Fireauth.Plug, hosted_auth_mode: :proxy
+```
+
+2. Mount the session endpoints (cookie minting) and verify cookies on requests:
+
+```elixir
+forward "/auth/firebase",
+  to: Fireauth.Plug.SessionRouter,
+  init_opts: [cookie_secure: false]
+
+plug Fireauth.Plug.SessionCookie
+```
+
+#### Snippet Setup
+
+In any HEEx template (requires `phoenix_html`), embed the snippet:
+
+```elixir
+{Fireauth.Snippets.client(
+  return_to: @return_to,
+  session_base: "/auth/firebase",
+  debug: true
+)}
+```
+
+#### Start Flow
+
+```html
+<script>
+  function buildProvider(providerId) {
+    const authNs = window.firebase.auth;
+
+    if (
+      providerId.indexOf("github") !== -1 &&
+      typeof authNs.GithubAuthProvider === "function"
+    ) {
+      return new authNs.GithubAuthProvider();
+    }
+
+    if (
+      providerId.indexOf("google") !== -1 &&
+      typeof authNs.GoogleAuthProvider === "function"
+    ) {
+      return new authNs.GoogleAuthProvider();
+    }
+
+    return null;
+  }
+
+  fireauth
+    .start({ provider: "github.com" }, function (provider, ctx) {
+      const authNs = window.firebase.auth;
+      const signInWithRedirect = authNs.signInWithRedirect;
+
+      const provider = buildProvider(providerId);
+      if (!provider)
+        throw new Error("Unsupported provider: " + String(providerId || ""));
+
+      return signInWithRedirect(auth, provider);
+    })
+    .error(function (s) {
+      console.warn("start error", s.code, s.message);
+    })
+    .onStateChange(function (s) {
+      console.debug("start state", s.stage);
+    });
+</script>
+```
+
+#### Verify Flow
+
+```html
+<script>
+  fireauth
+    .verify(
+      {
+        requireVerified: true,
+        getAuth: window.firebase.auth.getAuth,
+      },
+      function (s) {
+        if (!s) return;
+        if (s.type === "error")
+          return showError(s.message || statusEl.textContent);
+        if (s.loading) return showLoading(s.message || statusEl.textContent);
+      },
+    )
+    .success(function () {
+      showLoading("Login successful. Redirecting...");
+    })
+    .error(function (s) {
+      showError((s && s.message) || statusEl.textContent);
+    });
+</script>
 ```
 
 ### Hosted Auth Modes

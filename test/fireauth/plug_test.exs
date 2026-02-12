@@ -43,15 +43,15 @@ defmodule Fireauth.PlugTest do
 
     assert conn.assigns.fireauth.claims == claims
     assert conn.assigns.fireauth.token == "tok"
-    assert %Fireauth.User{} = conn.assigns.fireauth.user_attrs
+    assert %Fireauth.User{} = conn.assigns.fireauth.user
   end
 
-  test "does nothing when bearer token is absent" do
+  test "sets default empty struct when bearer token is absent" do
     conn =
       conn(:get, "/")
       |> FireauthPlug.call(FireauthPlug.init(serve_hosted_auth?: false))
 
-    refute Map.has_key?(conn.assigns, :fireauth)
+    assert conn.assigns.fireauth == %Fireauth{user: nil, claims: nil, token: nil}
   end
 
   test "on_invalid_token :unauthorized returns 401" do

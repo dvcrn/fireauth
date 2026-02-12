@@ -13,6 +13,14 @@ defmodule Fireauth do
   @type id_token :: String.t()
   @type claims :: Claims.t()
 
+  defstruct [:user, :claims, :token]
+
+  @type t :: %__MODULE__{
+          user: Fireauth.User.t() | nil,
+          claims: Fireauth.Claims.t() | nil,
+          token: String.t() | nil
+        }
+
   @doc """
   Verify a Firebase ID token and return its claims.
 
@@ -51,9 +59,22 @@ defmodule Fireauth do
   def claims_to_user_attrs(%Claims{} = claims), do: Fireauth.User.from_claims(claims)
 
   @doc """
-  Check if the given user or claims has an identity for the specified provider.
+  Get all identities from a user, claims, or Fireauth struct.
   """
-  @spec has_identity?(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) :: boolean()
+  @spec identities(Fireauth.User.t() | Fireauth.Claims.t() | t()) :: map()
+  def identities(%Fireauth{user: user}), do: identities(user)
+
+  def identities(%{identities: identities}) when is_map(identities), do: identities
+
+  def identities(_data), do: %{}
+
+  @doc """
+  Check if the given user, claims, or Fireauth struct has an identity for the specified provider.
+  """
+  @spec has_identity?(Fireauth.User.t() | Fireauth.Claims.t() | t(), String.t() | atom()) ::
+          boolean()
+  def has_identity?(%Fireauth{user: user}, provider), do: has_identity?(user, provider)
+
   def has_identity?(%{identities: identities}, provider) when is_map(identities) do
     Map.has_key?(identities, to_string(provider))
   end
@@ -61,10 +82,12 @@ defmodule Fireauth do
   def has_identity?(_data, _provider), do: false
 
   @doc """
-  Get the first identity ID for the given provider from a user or claims.
+  Get the first identity ID for the given provider from a user, claims, or Fireauth struct.
   """
-  @spec identity(Fireauth.User.t() | Fireauth.Claims.t(), String.t() | atom()) ::
+  @spec identity(Fireauth.User.t() | Fireauth.Claims.t() | t(), String.t() | atom()) ::
           String.t() | nil
+  def identity(%Fireauth{user: user}, provider), do: identity(user, provider)
+
   def identity(%{identities: identities}, provider) when is_map(identities) do
     case Map.get(identities, to_string(provider)) do
       [id | _] -> id

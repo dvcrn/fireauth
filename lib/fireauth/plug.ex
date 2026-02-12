@@ -15,6 +15,7 @@ defmodule Fireauth.Plug do
   import Plug.Conn
 
   alias Fireauth.Plug.FirebaseAuthProxy
+  alias Fireauth.Plug.FirebaseInitJson
   alias Fireauth.Plug.HostedAuthFiles
 
   @behaviour Plug
@@ -50,6 +51,11 @@ defmodule Fireauth.Plug do
   end
 
   defp do_serve_hosted_auth(conn, opts) do
+    conn = FirebaseInitJson.call(conn, opts)
+    if conn.halted, do: conn, else: do_serve_hosted_auth_rest(conn, opts)
+  end
+
+  defp do_serve_hosted_auth_rest(conn, opts) do
     case Keyword.get(opts, :hosted_auth_mode, :proxy) do
       :proxy ->
         conn = FirebaseAuthProxy.call(conn, opts)
@@ -64,6 +70,15 @@ defmodule Fireauth.Plug do
   end
 
   defp maybe_attach_firebase_claims(%Plug.Conn{} = conn, opts) do
+    assigns_key = Keyword.fetch!(opts, :assigns_key)
+
+    conn =
+      if Map.has_key?(conn.assigns, assigns_key) do
+        conn
+      else
+        assign(conn, assigns_key, %Fireauth{user: nil, claims: nil, token: nil})
+      end
+
     case bearer_token(conn) do
       nil -> conn
       token -> verify_and_attach(conn, token, opts)
@@ -75,10 +90,12 @@ defmodule Fireauth.Plug do
       {:ok, claims} ->
         assigns_key = Keyword.fetch!(opts, :assigns_key)
 
-        fireauth = %{
+        user_attrs = Fireauth.claims_to_user_attrs(claims)
+
+        fireauth = %Fireauth{
           token: token,
           claims: claims,
-          user_attrs: Fireauth.claims_to_user_attrs(claims)
+          user: user_attrs
         }
 
         assign(conn, assigns_key, fireauth)
