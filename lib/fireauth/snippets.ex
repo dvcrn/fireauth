@@ -23,19 +23,14 @@ defmodule Fireauth.Snippets do
   Public API on `window.fireauth`:
 
   - `start(opts, callback)`
-    - stores localStorage markers
     - runs your callback to start Firebase redirect
 
   - `verify(opts, callback)`
-    - checks localStorage markers
-    - resolves id token
+    - resolves current Firebase user via `opts.getAuth()`
+    - reads id token from `currentUser.getIdToken()`
     - exchanges id token for session cookie
     - redirects to `return_to`
     - returns chain handlers: `.success(...).error(...).onStateChange(...)`
-
-  Token resolution for `verify`:
-
-  - `opts.getIdToken(context)`
 
   Options:
   - `:return_to` - internal path to navigate to after session is established (default: `"/"`)
@@ -60,25 +55,8 @@ defmodule Fireauth.Snippets do
           debug: #{if(debug, do: "true", else: "false")}
         };
 
-        var STARTED_KEY = "fireauth.started.v1";
-        var PROVIDER_KEY = "fireauth.provider_id.v1";
-        var RETURN_TO_KEY = "fireauth.return_to.v1";
-        var SESSION_BASE_KEY = "fireauth.session_base.v1";
-
         function safeCall(cb, value) {
           try { cb(value); } catch (_e) {}
-        }
-
-        function safeGet(key) {
-          try { return window.localStorage.getItem(key); } catch (_e) { return null; }
-        }
-
-        function safeSet(key, value) {
-          try { window.localStorage.setItem(key, value); } catch (_e) {}
-        }
-
-        function safeRemove(key) {
-          try { window.localStorage.removeItem(key); } catch (_e) {}
         }
 
         function sanitizeReturnToPath(path) {
@@ -204,20 +182,6 @@ defmodule Fireauth.Snippets do
           );
         }
 
-        function setFlowMarkers(providerId, returnTo, sessionBase) {
-          safeSet(STARTED_KEY, "1");
-          safeSet(PROVIDER_KEY, providerId || "");
-          safeSet(RETURN_TO_KEY, sanitizeReturnToPath(returnTo || "/"));
-          safeSet(SESSION_BASE_KEY, sessionBase || "/auth/firebase");
-        }
-
-        function clearFlowMarkers() {
-          safeRemove(STARTED_KEY);
-          safeRemove(PROVIDER_KEY);
-          safeRemove(RETURN_TO_KEY);
-          safeRemove(SESSION_BASE_KEY);
-        }
-
         async function exchangeIdTokenForCookie(sessionBase, idToken) {
           var csrfResp = await fetch(sessionBase + "/csrf", { credentials: "same-origin" });
           if (!csrfResp.ok) throw new Error("csrf failed: " + csrfResp.status);
@@ -243,18 +207,17 @@ defmodule Fireauth.Snippets do
           }
         }
 
-        async function resolveCurrentUser(input, context) {
-          if (typeof input.getAuth === "function") {
-            console.log("found getAuth", input.getAuth());
-            const auth = input.getAuth();
+        async function resolveCurrentUser(getAuth) {
+          if (typeof getAuth !== "function") return null;
 
+          var auth = await Promise.resolve(getAuth());
+          if (!auth) return null;
+
+          if (typeof auth.authStateReady === "function") {
             await auth.authStateReady();
-            console.log(auth.currentUser);
-
-            return auth.currentUser;
           }
 
-          return null;
+          return auth.currentUser || null;
         }
 
         if (typeof fw.onStateChange !== "function") {
@@ -318,7 +281,6 @@ defmodule Fireauth.Snippets do
             return chain;
           }
 
-          setFlowMarkers(providerId, returnTo, sessionBase);
           publishLoading(chain, base, "start_redirecting", "Redirecting to provider...");
 
           Promise.resolve()
@@ -333,7 +295,6 @@ defmodule Fireauth.Snippets do
               publishSuccess(chain, base, "start_dispatched", { message: "Redirect dispatched." });
             })
             .catch(function (err) {
-              clearFlowMarkers();
               log("error", "start failed", err);
               publishError(
                 chain,
@@ -357,24 +318,9 @@ defmodule Fireauth.Snippets do
             });
           }
 
-          var started = safeGet(STARTED_KEY) === "1";
-          if (!started) {
-            publishError(
-              chain,
-              baseState("verify", "", fw._defaults.returnTo, fw._defaults.sessionBase),
-              "verify_missing_start",
-              "missing_start",
-              "Missing local auth marker. Start sign-in again."
-            );
-            return chain;
-          }
-
-          var providerId = safeGet(PROVIDER_KEY) || input.provider || input.providerId || "";
-          var returnTo = sanitizeReturnToPath(
-            safeGet(RETURN_TO_KEY) || input.returnTo || fw._defaults.returnTo || "/"
-          );
-          var sessionBase =
-            safeGet(SESSION_BASE_KEY) || input.sessionBase || fw._defaults.sessionBase || "/auth/firebase";
+          var providerId = input.provider || input.providerId || "";
+          var returnTo = sanitizeReturnToPath(input.returnTo || fw._defaults.returnTo || "/");
+          var sessionBase = input.sessionBase || fw._defaults.sessionBase || "/auth/firebase";
           var requireVerified =
             input.requireVerified === undefined
               ? !!fw._defaults.requireVerified
@@ -403,24 +349,15 @@ defmodule Fireauth.Snippets do
 
           Promise.resolve()
             .then(function () {
-              return resolveCurrentUser(input, {
-                providerId: providerId,
-                returnTo: returnTo,
-                sessionBase: sessionBase,
-                requireVerified: requireVerified
-              });
+              return resolveCurrentUser(input.getAuth);
             })
             .then(async function (currentUser) {
-              if (!currentUser) {
+              if (!currentUser || typeof currentUser.getIdToken !== "function") {
                 publishError(chain, base, "verify_missing_token", "missing_token", "No idToken available for verify.");
                 return;
-              };
+              }
 
-              console.log(currentUser);
-              console.log(await currentUser.getIdToken())
               var idToken = await currentUser.getIdToken();
-              var emailVerified = currentUser.emailVerified;
-
               if (!idToken) {
                 publishError(chain, base, "verify_missing_token", "missing_token", "No idToken available for verify.");
                 return;
@@ -431,13 +368,14 @@ defmodule Fireauth.Snippets do
                 return;
               }
 
-              if (requireVerified && emailVerified === false) {
-                console.log("providerData", currentUser.providerData);
-                console.log("filtered", currentUser.providerData.filter((z) => z.providerId !== "password" && z.providerid !== "email"))
+              if (requireVerified && currentUser.emailVerified === false) {
+                var providerData = Array.isArray(currentUser.providerData) ? currentUser.providerData : [];
+                var hasNonEmailProvider = providerData.some(function (entry) {
+                  var pid = entry && entry.providerId;
+                  return pid && pid !== "password" && pid !== "emailLink";
+                });
 
-                // check if provider without password / email is present
-                // in that case we allow unverified email
-                if (currentUser.providerData.filter((z) => z.providerId !== "password" && z.providerid !== "email").length === 0) {
+                if (!hasNonEmailProvider) {
                   publishError(
                     chain,
                     base,
@@ -453,7 +391,6 @@ defmodule Fireauth.Snippets do
 
               return exchangeIdTokenForCookie(sessionBase, idToken)
                 .then(function () {
-                  clearFlowMarkers();
                   publishSuccess(chain, base, "verify_success");
                   window.location.replace(returnTo);
                 });

@@ -219,11 +219,10 @@ Fireauth ships a JavaScript helper via `Fireauth.Snippets.client/1` to make this
 It exposes:
 
 - `window.fireauth.start(opts, callback)`:
-  - sets localStorage flow markers
-  - then executes your callback to start Firebase redirect
+  - executes your callback to start Firebase redirect
 - `window.fireauth.verify(opts, callback)`:
-  - checks localStorage flow markers
-  - resolves `idToken`
+  - resolves current user from `opts.getAuth()`
+  - calls `currentUser.getIdToken()`
   - exchanges `idToken` for session cookie
   - redirects to `return_to`
   - supports chaining: `.success(...).error(...).onStateChange(...)`
@@ -289,13 +288,15 @@ In any HEEx template (requires `phoenix_html`), embed the snippet:
   }
 
   fireauth
-    .start({ provider: "github.com" }, function (provider, ctx) {
+    .start({ provider: "github.com" }, function (providerId, ctx) {
+      const auth = window.firebase.auth.getAuth();
       const authNs = window.firebase.auth;
       const signInWithRedirect = authNs.signInWithRedirect;
 
       const provider = buildProvider(providerId);
-      if (!provider)
+      if (!provider) {
         throw new Error("Unsupported provider: " + String(providerId || ""));
+      }
 
       return signInWithRedirect(auth, provider);
     })
@@ -314,10 +315,7 @@ In any HEEx template (requires `phoenix_html`), embed the snippet:
 <script>
   fireauth
     .verify(
-      {
-        requireVerified: true,
-        getAuth: window.firebase.auth.getAuth,
-      },
+      { requireVerified: true, getAuth: window.firebase.auth.getAuth },
       function (s) {
         if (!s) return;
         if (s.type === "error")
