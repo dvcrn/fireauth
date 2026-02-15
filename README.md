@@ -11,7 +11,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your mix.exs
 
 ```
-{:fireauth, "~> 0.3.0"},
+{:fireauth, "~> 0.4.0"},
 ```
 
 ## Two Ways To Use This Library
