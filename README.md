@@ -220,6 +220,8 @@ It exposes:
 
 - `window.fireauth.start(opts, callback)`:
   - executes your callback to start Firebase redirect
+  - supports `opts.ready` — a function polled until truthy before invoking the callback (useful when the Firebase SDK loads asynchronously via a deferred script)
+  - supports `opts.readyTimeout` — max ms to wait (default 5000)
 - `window.fireauth.verify(opts, callback)`:
   - resolves current user from `opts.getAuth()`
   - calls `currentUser.getIdToken()`
@@ -288,18 +290,30 @@ In any HEEx template (requires `phoenix_html`), embed the snippet:
   }
 
   fireauth
-    .start({ provider: "github.com" }, function (providerId, ctx) {
-      const auth = window.firebase.auth.getAuth();
-      const authNs = window.firebase.auth;
-      const signInWithRedirect = authNs.signInWithRedirect;
+    .start(
+      {
+        provider: "github.com",
+        // Wait for the Firebase SDK to be available before starting.
+        // Useful when the app bundle is loaded with <script defer>.
+        ready: function () {
+          return !!window.myFirebaseAuth;
+        },
+        // Optional: max ms to wait (default 5000)
+        // readyTimeout: 3000,
+      },
+      function (providerId, ctx) {
+        const auth = window.firebase.auth.getAuth();
+        const authNs = window.firebase.auth;
+        const signInWithRedirect = authNs.signInWithRedirect;
 
-      const provider = buildProvider(providerId);
-      if (!provider) {
-        throw new Error("Unsupported provider: " + String(providerId || ""));
-      }
+        const provider = buildProvider(providerId);
+        if (!provider) {
+          throw new Error("Unsupported provider: " + String(providerId || ""));
+        }
 
-      return signInWithRedirect(auth, provider);
-    })
+        return signInWithRedirect(auth, provider);
+      },
+    )
     .error(function (s) {
       console.warn("start error", s.code, s.message);
     })

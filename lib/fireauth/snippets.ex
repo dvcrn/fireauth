@@ -250,11 +250,30 @@ defmodule Fireauth.Snippets do
           };
         }
 
+        function waitForReady(readyFn, intervalMs, maxMs) {
+          return new Promise(function (resolve, reject) {
+            if (typeof readyFn !== "function" || readyFn()) return resolve();
+            var elapsed = 0;
+            var timer = setInterval(function () {
+              elapsed += intervalMs;
+              if (readyFn()) { clearInterval(timer); return resolve(); }
+              if (elapsed >= maxMs) {
+                clearInterval(timer);
+                return reject(new Error("Timed out waiting for ready after " + maxMs + "ms"));
+              }
+            }, intervalMs);
+          });
+        }
+
         fw.start = function (opts, callback) {
           var input = (opts && typeof opts === "object") ? opts : {};
           var providerId = input.provider || input.providerId || "";
           var returnTo = sanitizeReturnToPath(input.returnTo || fw._defaults.returnTo || "/");
           var sessionBase = input.sessionBase || fw._defaults.sessionBase || "/auth/firebase";
+          var readyFn = typeof input.ready === "function" ? input.ready : null;
+          var readyTimeout = (typeof input.readyTimeout === "number" && input.readyTimeout > 0)
+            ? input.readyTimeout
+            : 5000;
           var startFn =
             (typeof callback === "function" && callback) ||
             (typeof input.callback === "function" && input.callback) ||
@@ -283,7 +302,7 @@ defmodule Fireauth.Snippets do
 
           publishLoading(chain, base, "start_redirecting", "Redirecting to provider...");
 
-          Promise.resolve()
+          waitForReady(readyFn, 50, readyTimeout)
             .then(function () {
               return startFn(providerId, {
                 providerId: providerId,
