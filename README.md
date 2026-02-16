@@ -36,7 +36,8 @@ defmodule MyApp.Router do
 
   # Verifies `Authorization: Bearer <idToken>` and assigns `conn.assigns.fireauth`.
   plug Fireauth.Plug,
-    serve_hosted_auth?: false,
+    # Optional: disable hosted callback handling in this plug instance.
+    default_controller: nil,
     # Optional if you set `config :fireauth, firebase_project_id: "..."` (or `FIREBASE_PROJECT_ID`).
     project_id: "your-project-id",
     on_invalid_token: :unauthorized
@@ -195,19 +196,25 @@ for a session cookie, and requires service account credentials.
 
 ### Hosted Auth Files (Optional)
 
-`Fireauth.Plug` can also proxy or serve Firebase hosted auth helper files at
-`/__/auth/*` and `/__/firebase/init.json`. Enable this if you want redirect-mode
-auth to work on your own domain in modern browsers.
+`Fireauth.Plug` can route Firebase hosted auth helper paths at `/__/auth/*` and
+`/__/firebase/init.json` via `callback_overrides`. Enable this if you want
+redirect-mode auth to work on your own domain in modern browsers.
 
 ```elixir
 plug Fireauth.Plug,
-  # Enable hosted auth file handling.
-  serve_hosted_auth?: true,
-  # :proxy (default) fetches from firebaseapp.com. :static serves local copies.
-  hosted_auth_mode: :proxy,
+  # Exact path overrides (overrides-only mode).
+  callback_overrides: %{
+    "/__/auth/handler" => {MyAppWeb.FirebaseHostedAuthController, :handler},
+    "/__/firebase/init.json" => Fireauth.ProxyController,
+    "/__/auth/handler.js" => Fireauth.HostedController
+  },
   # Optional if you set `config :fireauth, firebase_project_id: "..."` (or `FIREBASE_PROJECT_ID`).
   project_id: "your-project-id"
 ```
+
+When `callback_overrides` is present, only paths in that map are handled.
+Unlisted managed callback paths fall back to `default_controller` (defaults to
+`Fireauth.HostedController`). Set `default_controller: nil` to disable fallback.
 
 ### Redirect-Mode Client Helper (Optional)
 
@@ -240,7 +247,15 @@ Optional UI integration:
 ```elixir
 # In your Endpoint (Phoenix) or top-level Plug stack (Plug.Router),
 # before your router.
-plug Fireauth.Plug, hosted_auth_mode: :proxy
+plug Fireauth.Plug,
+  callback_overrides: %{
+    "/__/auth/handler" => Fireauth.HostedController,
+    "/__/auth/iframe" => Fireauth.HostedController,
+    "/__/auth/handler.js" => Fireauth.HostedController,
+    "/__/auth/iframe.js" => Fireauth.HostedController,
+    "/__/auth/experiments.js" => Fireauth.HostedController,
+    "/__/firebase/init.json" => Fireauth.ProxyController
+  }
 ```
 
 2. Mount the session endpoints (cookie minting) and verify cookies on requests:
@@ -346,12 +361,63 @@ In any HEEx template (requires `phoenix_html`), embed the snippet:
 </script>
 ```
 
-### Hosted Auth Modes
+### Hosted Auth Routing
 
 To support redirect-mode auth in modern browsers (avoiding third-party cookie issues), you must serve Firebase's helper files from your own domain.
 
-1. **`:proxy` (Default):** Transparently proxies requests to `https://<project>.firebaseapp.com`. This is the most robust method. Responses are cached in-memory.
-2. **`:static`:** Serves local copies of the helper files embedded in the `fireauth` library. Use this if your environment cannot make outbound requests to Firebase at runtime.
+1. **`callback_overrides`:** exact-path overrides for specific hosted callback paths.
+2. **`Fireauth.ProxyController`:** proxies requests to `https://<project>.firebaseapp.com` with in-memory caching.
+3. **`default_controller` (default: `Fireauth.HostedController`):** fallback controller for managed hosted callback paths not listed in `callback_overrides`.
+4. **`Fireauth.HostedController`:** serves local hosted files, and renders snippet-based HTML for `"/__/auth/handler"` and `"/__/auth/iframe"`.
+
+### Hosted Handler Snippets
+
+If you override `"/__/auth/handler"` with your own controller, use these helpers
+to keep Firebase bootstrap behavior consistent:
+
+- `Fireauth.Snippets.hosted_auth_handler_bootstrap/0`
+- `Fireauth.Snippets.hosted_auth_handler_document/0`
+
+Example controller for `callback_overrides`:
+
+```elixir
+defmodule MyAppWeb.FirebaseHostedAuthController do
+  use MyAppWeb, :controller
+
+  # Used by:
+  # "/__/auth/handler" => {MyAppWeb.FirebaseHostedAuthController, :handler}
+  def handler(conn, _params) do
+    conn
+    |> Plug.Conn.put_resp_content_type("text/html")
+    |> Plug.Conn.send_resp(200, Fireauth.Snippets.hosted_auth_handler_document())
+    |> Plug.Conn.halt()
+  end
+end
+```
+
+If you need custom HTML, keep Firebase bootstrap by including
+`Fireauth.Snippets.hosted_auth_handler_bootstrap/0`:
+
+```elixir
+def handler(conn, _params) do
+  body = """
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    #{Fireauth.Snippets.hosted_auth_handler_bootstrap()}
+  </head>
+  <body></body>
+  </html>
+  """
+
+  conn
+  |> Plug.Conn.put_resp_content_type("text/html")
+  |> Plug.Conn.send_resp(200, body)
+  |> Plug.Conn.halt()
+end
+```
 
 ### Caching
 

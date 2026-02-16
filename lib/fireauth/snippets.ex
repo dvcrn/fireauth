@@ -434,6 +434,72 @@ defmodule Fireauth.Snippets do
     Phoenix.HTML.raw(html)
   end
 
+  @doc """
+  Firebase-compatible bootstrap snippet for `"/__/auth/handler"`.
+  """
+  @spec hosted_auth_handler_bootstrap() :: String.t()
+  def hosted_auth_handler_bootstrap do
+    """
+    <script type="text/javascript" src="experiments.js"></script>
+    <script type="text/javascript" src="handler.js"></script>
+    <script type="text/javascript" nonce="firebase-auth-helper">
+    var POST_BODY = '{{POST_BODY}}';
+    fireauth.oauthhelper.widget.initialize();
+    </script>
+    """
+  end
+
+  @doc """
+  Full HTML document for `"/__/auth/handler"`.
+  """
+  @spec hosted_auth_handler_document() :: String.t()
+  def hosted_auth_handler_document do
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    #{hosted_auth_handler_bootstrap()}
+    </head>
+    <body>
+    </body>
+    </html>
+    """
+  end
+
+  @doc """
+  Firebase-compatible bootstrap snippet for `"/__/auth/iframe"`.
+  """
+  @spec hosted_auth_iframe_bootstrap() :: String.t()
+  def hosted_auth_iframe_bootstrap do
+    """
+    <script type="text/javascript" src="iframe.js"></script>
+    <script type="text/javascript" nonce="firebase-auth-helper">
+    fireauth.iframe.AuthRelay.initialize();
+    </script>
+    """
+  end
+
+  @doc """
+  Full HTML document for `"/__/auth/iframe"`.
+  """
+  @spec hosted_auth_iframe_document() :: String.t()
+  def hosted_auth_iframe_document do
+    """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta name=viewport content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    #{hosted_auth_iframe_bootstrap()}
+    </head>
+    <body>
+    </body>
+    </html>
+    """
+  end
+
   defp h(nil), do: ""
 
   defp h(value) when is_binary(value) do

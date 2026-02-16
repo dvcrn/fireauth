@@ -5,7 +5,8 @@ defmodule Fireauth do
   - `Fireauth.verify_id_token/2` verifies Firebase SecureToken ID tokens.
   - `Fireauth.create_session_cookie/2` mints Firebase session cookies (requires admin service account).
   - `Fireauth.Plug` optionally attaches verified claims to `conn.assigns`
-    and proxies Firebase hosted auth helper files at `/__/auth/*`.
+    and serves Firebase hosted auth helper files at `/__/auth/*` via proxy,
+    static files, or callback overrides.
   """
 
   alias Fireauth.{Claims, TokenValidator}

@@ -24,6 +24,17 @@ defmodule Fireauth.PlugTest do
 
   setup :verify_on_exit!
 
+  defmodule CallbackController do
+    import Plug.Conn
+
+    def handler(conn, _params) do
+      conn
+      |> put_resp_content_type("text/html")
+      |> send_resp(200, "<html>custom handler</html>")
+      |> halt()
+    end
+  end
+
   test "assigns verified claims when bearer token is present" do
     claims = %Claims{
       sub: "uid",
@@ -39,7 +50,7 @@ defmodule Fireauth.PlugTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Bearer tok")
-      |> FireauthPlug.call(FireauthPlug.init(serve_hosted_auth?: false))
+      |> FireauthPlug.call(FireauthPlug.init([]))
 
     assert conn.assigns.fireauth.claims == claims
     assert conn.assigns.fireauth.token == "tok"
@@ -49,7 +60,7 @@ defmodule Fireauth.PlugTest do
   test "sets default empty struct when bearer token is absent" do
     conn =
       conn(:get, "/")
-      |> FireauthPlug.call(FireauthPlug.init(serve_hosted_auth?: false))
+      |> FireauthPlug.call(FireauthPlug.init([]))
 
     assert conn.assigns.fireauth == %Fireauth{user: nil, claims: nil, token: nil}
   end
@@ -62,28 +73,89 @@ defmodule Fireauth.PlugTest do
     conn =
       conn(:get, "/")
       |> put_req_header("authorization", "Bearer bad")
-      |> FireauthPlug.call(
-        FireauthPlug.init(serve_hosted_auth?: false, on_invalid_token: :unauthorized)
-      )
+      |> FireauthPlug.call(FireauthPlug.init(on_invalid_token: :unauthorized))
 
     assert conn.halted
     assert conn.status == 401
   end
 
-  test "proxies firebase hosted auth helper files (no token validation)" do
-    :ok = Cache.clear()
-
-    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/handler", nil ->
-      {:ok,
-       %{status: 200, headers: [{"content-type", "text/html"}], body: "<html>handler</html>"}}
-    end)
-
+  test "falls back to default_controller for managed callback paths" do
     conn =
       conn(:get, "/__/auth/handler")
       |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
 
     assert conn.halted
     assert conn.status == 200
-    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/html"
+    assert conn.resp_body =~ "fireauth.oauthhelper.widget.initialize()"
+  end
+
+  test "callback_overrides dispatches to tuple controller action" do
+    conn =
+      conn(:get, "/__/auth/handler")
+      |> FireauthPlug.call(
+        FireauthPlug.init(
+          callback_overrides: %{
+            "/__/auth/handler" => {CallbackController, :handler}
+          }
+        )
+      )
+
+    assert conn.halted
+    assert conn.status == 200
+    assert conn.resp_body =~ "custom handler"
+  end
+
+  test "callback_overrides supports plug module targets" do
+    :ok = Cache.clear()
+
+    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/firebase/init.json", nil ->
+      {:ok,
+       %{status: 200, headers: [{"content-type", "application/json"}], body: ~s({"ok":true})}}
+    end)
+
+    conn =
+      conn(:get, "/__/firebase/init.json")
+      |> FireauthPlug.call(
+        FireauthPlug.init(
+          project_id: "myproj",
+          callback_overrides: %{
+            "/__/firebase/init.json" => Fireauth.ProxyController
+          }
+        )
+      )
+
+    assert conn.halted
+    assert conn.status == 200
+    assert conn.resp_body == ~s({"ok":true})
+  end
+
+  test "callback_overrides falls back to default_controller for unlisted managed path" do
+    conn =
+      conn(:get, "/__/auth/iframe")
+      |> FireauthPlug.call(
+        FireauthPlug.init(
+          callback_overrides: %{
+            "/__/auth/handler" => Fireauth.HostedController
+          }
+        )
+      )
+
+    assert conn.halted
+    assert conn.status == 200
+  end
+
+  test "default_controller nil disables fallback behavior" do
+    conn =
+      conn(:get, "/__/auth/iframe")
+      |> FireauthPlug.call(
+        FireauthPlug.init(
+          callback_overrides: %{
+            "/__/auth/handler" => Fireauth.HostedController
+          },
+          default_controller: nil
+        )
+      )
+
+    refute conn.halted
   end
 end
