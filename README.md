@@ -14,7 +14,7 @@ Add to your mix.exs
 {:fireauth, "~> 0.5.0"},
 ```
 
-You can also feed the SETUP_LLMS.md file into your agent to automate setup
+You can also feed the LLM_SETUP.md file into your agent to automate setup
 
 ## Two Ways To Use This Library
 
