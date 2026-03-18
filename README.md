@@ -421,6 +421,71 @@ def handler(conn, _params) do
 end
 ```
 
+Important: the bootstrap preserves Firebase compatibility, but `handler.js`
+may still inject Firebase-managed UI into the page at runtime. If you want a
+fully branded handler page, you may also need to hide Firebase's injected
+pending / continue / error containers with CSS.
+
+In practice, a setup like this works well:
+
+```elixir
+plug Fireauth.Plug,
+  callback_overrides: %{
+    "/__/auth/handler" => {MyAppWeb.FirebaseHostedAuthController, :handler},
+    "/__/auth/handler.js" => Fireauth.ProxyController,
+    "/__/firebase/init.json" => Fireauth.HostedController
+  }
+```
+
+```elixir
+def handler(conn, _params) do
+  body = """
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    #{Fireauth.Snippets.hosted_auth_handler_bootstrap()}
+    <style>
+      #pending-screen,
+      #progressBar,
+      .firebase-progress-bar,
+      #app-verification-progress-bar,
+      .firebase-middle-progress-bar,
+      #status-container,
+      #status-container-label,
+      #continue-screen,
+      #error-screen,
+      #app-verification-screen,
+      .firebase-container {
+        display: none !important;
+        visibility: hidden !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>Completing authentication...</main>
+  </body>
+  </html>
+  """
+
+  conn
+  |> Plug.Conn.put_resp_content_type("text/html")
+  |> Plug.Conn.send_resp(200, body)
+  |> Plug.Conn.halt()
+end
+```
+
+### Hosted Action Pages
+
+`"/__/auth/action"` is used for Firebase email action flows such as email-link
+sign-in, verify-email, and password reset.
+
+If you override `"/__/auth/action"` for `mode=signIn`, prefer returning a
+standalone HTML document with inline CSS / JS that redirects into your app's
+final verify page. Do not rely on your main app bundle or root layout being
+available on hosted callback pages.
+
 ### Caching
 
 This library caches `/__/auth/*` calls in addition to the Google public keys used
