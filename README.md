@@ -11,7 +11,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your mix.exs
 
 ```
-{:fireauth, "~> 0.5.0"},
+{:fireauth, "~> 0.6.0"},
 ```
 
 You can also feed the LLM_SETUP.md file into your agent to automate setup
