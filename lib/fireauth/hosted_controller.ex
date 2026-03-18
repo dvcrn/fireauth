@@ -2,6 +2,9 @@ defmodule Fireauth.HostedController do
   @moduledoc """
   Plug-style controller for Firebase hosted auth callback files.
 
+  - `"/__/auth/action"` is proxied upstream to Firebase's hosted action
+    handler, which lets consumers use the same-origin path without having
+    to implement the email action handler page themselves.
   - `"/__/auth/handler"` and `"/__/auth/iframe"` are rendered from
     `Fireauth.Snippets` so consumers can reuse the same bootstrap contract.
   - All other hosted auth files are served from embedded static assets.
@@ -13,12 +16,25 @@ defmodule Fireauth.HostedController do
 
   require Logger
 
+  alias Fireauth.Plug.FirebaseAuthProxy
   alias Fireauth.Plug.FirebaseInitJson
   alias Fireauth.Plug.HostedAuthFiles
   alias Fireauth.Snippets
 
   @impl true
   def init(opts) when is_list(opts), do: opts
+
+  def call(%Plug.Conn{request_path: "/__/auth/action"} = conn, opts)
+      when conn.method in ["GET", "HEAD"] do
+    Logger.debug("fireauth: hosted_controller proxying action path=/__/auth/action")
+    FirebaseAuthProxy.call(conn, opts)
+  end
+
+  def call(%Plug.Conn{request_path: "/__/auth/action.js"} = conn, opts)
+      when conn.method in ["GET", "HEAD"] do
+    Logger.debug("fireauth: hosted_controller proxying action script path=/__/auth/action.js")
+    FirebaseAuthProxy.call(conn, opts)
+  end
 
   @impl true
   def call(%Plug.Conn{request_path: "/__/auth/handler"} = conn, _opts)

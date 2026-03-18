@@ -21,6 +21,8 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   @default_cache_ttl_ms 3_600_000
 
   @proxied_paths MapSet.new([
+                   "/__/auth/action",
+                   "/__/auth/action.js",
                    "/__/auth/handler",
                    "/__/auth/handler.js",
                    "/__/auth/experiments.js",
@@ -167,23 +169,23 @@ defmodule Fireauth.Plug.FirebaseAuthProxy do
   end
 
   defp content_type_for_path(path) do
-    case Path.basename(path) do
-      "handler" ->
+    name = Path.basename(path)
+
+    cond do
+      name in ~w(action handler iframe links) ->
         "text/html"
 
-      "iframe" ->
+      Path.extname(name) == ".js" ->
+        "text/javascript"
+
+      Path.extname(name) == ".json" ->
+        "application/json"
+
+      Path.extname(name) == ".html" ->
         "text/html"
 
-      "links" ->
-        "text/html"
-
-      name ->
-        case Path.extname(name) do
-          ".js" -> "text/javascript"
-          ".json" -> "application/json"
-          ".html" -> "text/html"
-          _ -> "application/octet-stream"
-        end
+      true ->
+        "application/octet-stream"
     end
   end
 end

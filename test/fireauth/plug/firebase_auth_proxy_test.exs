@@ -14,6 +14,50 @@ defmodule Fireauth.Plug.FirebaseAuthProxyTest do
     refute conn.halted
   end
 
+  test "proxies /__/auth/action" do
+    :ok = Cache.clear()
+
+    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action", "mode=signIn" ->
+      {:ok,
+       %{
+         status: 200,
+         headers: [{"content-type", "text/html"}],
+         body: "<html>action handler</html>"
+       }}
+    end)
+
+    conn =
+      conn(:get, "/__/auth/action?mode=signIn")
+      |> FirebaseAuthProxy.call(project_id: "myproj")
+
+    assert conn.halted
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/html"
+    assert conn.resp_body =~ "action handler"
+  end
+
+  test "proxies /__/auth/action.js" do
+    :ok = Cache.clear()
+
+    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action.js", nil ->
+      {:ok,
+       %{
+         status: 200,
+         headers: [{"content-type", "text/javascript"}],
+         body: "console.log('action');"
+       }}
+    end)
+
+    conn =
+      conn(:get, "/__/auth/action.js")
+      |> FirebaseAuthProxy.call(project_id: "myproj")
+
+    assert conn.halted
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/javascript"
+    assert conn.resp_body =~ "console.log"
+  end
+
   setup do
     Mox.set_mox_global()
     Application.put_env(:fireauth, :firebase_upstream_adapter, Fireauth.FirebaseUpstreamMock)

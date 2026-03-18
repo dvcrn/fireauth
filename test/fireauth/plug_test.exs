@@ -89,6 +89,44 @@ defmodule Fireauth.PlugTest do
     assert conn.resp_body =~ "fireauth.oauthhelper.widget.initialize()"
   end
 
+  test "falls back to default_controller for /__/auth/action" do
+    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action", "mode=signIn" ->
+      {:ok,
+       %{
+         status: 200,
+         headers: [{"content-type", "text/html"}],
+         body: "<html>action handler</html>"
+       }}
+    end)
+
+    conn =
+      conn(:get, "/__/auth/action?mode=signIn")
+      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert conn.resp_body =~ "action handler"
+  end
+
+  test "falls back to default_controller for /__/auth/action.js" do
+    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action.js", nil ->
+      {:ok,
+       %{
+         status: 200,
+         headers: [{"content-type", "text/javascript"}],
+         body: "console.log('action.js')"
+       }}
+    end)
+
+    conn =
+      conn(:get, "/__/auth/action.js")
+      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert conn.resp_body =~ "action.js"
+  end
+
   test "callback_overrides dispatches to tuple controller action" do
     conn =
       conn(:get, "/__/auth/handler")

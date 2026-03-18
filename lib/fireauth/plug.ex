@@ -109,6 +109,8 @@ defmodule Fireauth.Plug do
   end
 
   @managed_callback_paths MapSet.new([
+                            "/__/auth/action",
+                            "/__/auth/action.js",
                             "/__/auth/handler",
                             "/__/auth/handler.js",
                             "/__/auth/experiments.js",
