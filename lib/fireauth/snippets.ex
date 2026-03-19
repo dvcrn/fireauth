@@ -33,7 +33,8 @@ defmodule Fireauth.Snippets do
     - returns chain handlers: `.success(...).error(...).onStateChange(...)`
 
   Options:
-  - `:return_to` - internal path to navigate to after session is established (default: `"/"`)
+  - `:return_to` - internal path or absolute http(s) URL to navigate to after
+    session is established (default: `"/"`)
   - `:session_base` - mount path for `Fireauth.Plug.SessionRouter` (default: `"/auth/firebase"`)
   - `:require_verified` - require verified email in verify flow (default: true)
   - `:debug` - enable console logging (default: false)
@@ -59,11 +60,22 @@ defmodule Fireauth.Snippets do
           try { cb(value); } catch (_e) {}
         }
 
-        function sanitizeReturnToPath(path) {
-          if (!path) return "/";
-          if (!path.startsWith("/")) return "/";
-          if (path.startsWith("//")) return "/";
-          return path;
+        function sanitizeReturnToDestination(value) {
+          if (!value) return "/";
+
+          if (value.startsWith("/")) {
+            if (value.startsWith("//")) return "/";
+            return value;
+          }
+
+          try {
+            var parsed = new URL(value);
+            if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+              return parsed.toString();
+            }
+          } catch (_e) {}
+
+          return "/";
         }
 
         function isJwt(token) {
@@ -141,7 +153,7 @@ defmodule Fireauth.Snippets do
             ts: Date.now(),
             mode: mode,
             providerId: providerId || "",
-            returnTo: sanitizeReturnToPath(returnTo || "/"),
+            returnTo: sanitizeReturnToDestination(returnTo || "/"),
             sessionBase: sessionBase || "/auth/firebase"
           };
         }
@@ -268,7 +280,7 @@ defmodule Fireauth.Snippets do
         fw.start = function (opts, callback) {
           var input = (opts && typeof opts === "object") ? opts : {};
           var providerId = input.provider || input.providerId || "";
-          var returnTo = sanitizeReturnToPath(input.returnTo || fw._defaults.returnTo || "/");
+          var returnTo = sanitizeReturnToDestination(input.returnTo || fw._defaults.returnTo || "/");
           var sessionBase = input.sessionBase || fw._defaults.sessionBase || "/auth/firebase";
           var readyFn = typeof input.ready === "function" ? input.ready : null;
           var readyTimeout = (typeof input.readyTimeout === "number" && input.readyTimeout > 0)
@@ -338,7 +350,7 @@ defmodule Fireauth.Snippets do
           }
 
           var providerId = input.provider || input.providerId || "";
-          var returnTo = sanitizeReturnToPath(input.returnTo || fw._defaults.returnTo || "/");
+          var returnTo = sanitizeReturnToDestination(input.returnTo || fw._defaults.returnTo || "/");
           var sessionBase = input.sessionBase || fw._defaults.sessionBase || "/auth/firebase";
           var requireVerified =
             input.requireVerified === undefined
