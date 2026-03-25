@@ -263,6 +263,19 @@ Fireauth.identities(user)                   # => %{"google.com" => ["..."], ...}
 Identity Toolkit (`accounts:sendOobCode`). Completing the sign-in still uses the
 Firebase Web SDK on your verify page via `signInWithEmailLink(...)`.
 
+### Custom Tokens & Account Management
+
+```elixir
+# Mint a custom token for server-side auth flows (e.g. signInWithCustomToken)
+{:ok, custom_token} = Fireauth.create_custom_token("user-123", claims: %{"role" => "admin"})
+
+# Exchange a custom token for a Firebase ID token (server-side)
+{:ok, id_token} = Fireauth.exchange_custom_token(custom_token, otp_app: :my_app)
+
+# Unlink a provider from a user
+{:ok, _response} = Fireauth.unlink_provider(id_token, "google.com", otp_app: :my_app)
+```
+
 ### Plugs
 
 | Plug | Purpose |
