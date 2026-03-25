@@ -8,3 +8,5 @@ Mox.defmock(Fireauth.SessionCookieValidatorMock, for: Fireauth.SessionCookieVali
 Mox.defmock(Fireauth.SessionCookieCreatorMock, for: Fireauth.SessionCookieCreator)
 Mox.defmock(Fireauth.ServerAuthMock, for: Fireauth.ServerAuth)
 Mox.defmock(Fireauth.EmailLinkSenderMock, for: Fireauth.EmailLinkSender)
+Mox.defmock(Fireauth.CustomTokenMock, for: Fireauth.CustomToken)
+Mox.defmock(Fireauth.AccountMock, for: Fireauth.Account)

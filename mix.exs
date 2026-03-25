@@ -6,7 +6,7 @@ defmodule Fireauth.MixProject do
       app: :fireauth,
       description:
         "Firebase Auth helpers for Phoenix/Plug (ID token verification + hosted auth helper files)",
-      version: "0.7.0",
+      version: "0.8.0",
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,

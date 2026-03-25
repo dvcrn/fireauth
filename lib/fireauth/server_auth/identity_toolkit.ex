@@ -89,6 +89,7 @@ defmodule Fireauth.ServerAuth.IdentityToolkit do
       "requestUri" => request_uri,
       "sessionId" => session_id,
       "postBody" => Client.blank_to_nil(post_body),
+      "idToken" => Client.blank_to_nil(Keyword.get(opts, :id_token)),
       "returnSecureToken" => true,
       "returnIdpCredential" => true,
       "tenantId" => Client.blank_to_nil(Keyword.get(opts, :tenant_id))

@@ -86,6 +86,48 @@ defmodule Fireauth do
   end
 
   @doc """
+  Mint a Firebase custom token for the given UID.
+
+  The token is a short-lived JWT (1 hour) signed with the service account
+  private key. Pass it to the client-side Firebase SDK via
+  `signInWithCustomToken` to establish a client-side session.
+
+  ## Options
+
+    * `:otp_app` - the OTP app to read config from (default `:fireauth`)
+    * `:claims` - optional map of additional claims (max 1000 bytes)
+  """
+  @spec create_custom_token(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def create_custom_token(uid, opts \\ []) when is_binary(uid) and is_list(opts) do
+    Fireauth.CustomToken.create_custom_token(uid, opts)
+  end
+
+  @doc """
+  Unlink a provider from a Firebase user.
+
+  Calls Identity Toolkit `accounts:update` with `deleteProvider`. Requires
+  an ID token for the user whose provider should be removed.
+  """
+  @spec unlink_provider(String.t(), String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def unlink_provider(id_token, provider_id, opts \\ [])
+      when is_binary(id_token) and is_binary(provider_id) and is_list(opts) do
+    Fireauth.Account.unlink_provider(id_token, provider_id, opts)
+  end
+
+  @doc """
+  Exchange a custom token for a Firebase ID token.
+
+  Makes a REST API call to `accounts:signInWithCustomToken`. Useful for
+  server-side flows that need an ID token for the current user, e.g. to pass
+  as the `:id_token` option to `finish_oauth_sign_in/4` for provider linking.
+  """
+  @spec exchange_custom_token(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
+  def exchange_custom_token(custom_token, opts \\ [])
+      when is_binary(custom_token) and is_list(opts) do
+    Fireauth.CustomToken.exchange_custom_token(custom_token, opts)
+  end
+
+  @doc """
   Convert verified Firebase claims into the common user attrs map.
   """
   @spec claims_to_user_attrs(claims()) :: Fireauth.User.t()
