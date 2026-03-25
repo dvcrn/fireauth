@@ -11,5 +11,5 @@ defmodule Fireauth.ServerAuth.StartResult do
           raw_response: map()
         }
 
-  defstruct [:provider_id, :auth_uri, :session_id, :context, :raw_response]
+  defstruct [:provider_id, :auth_uri, :session_id, :context, raw_response: %{}]
 end

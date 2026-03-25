@@ -44,7 +44,7 @@ defmodule Fireauth.SessionCookie do
          {:ok, sa} <- load_service_account(opts),
          {:ok, project_id} <- resolve_project_id(opts, sa),
          {:ok, access_token} <- OAuth.fetch_access_token(sa, opts) do
-      create_session_cookie(project_id, id_token, valid_duration_s, access_token)
+      do_create_session_cookie(project_id, id_token, valid_duration_s, access_token)
     end
   end
 
@@ -73,7 +73,7 @@ defmodule Fireauth.SessionCookie do
 
   defp validate_duration(_), do: {:error, :invalid_valid_duration}
 
-  defp create_session_cookie(project_id, id_token, valid_duration_s, access_token)
+  defp do_create_session_cookie(project_id, id_token, valid_duration_s, access_token)
        when is_binary(project_id) and is_binary(id_token) and is_integer(valid_duration_s) and
               is_binary(access_token) do
     url = "#{@identitytoolkit_base}/projects/#{project_id}:createSessionCookie"

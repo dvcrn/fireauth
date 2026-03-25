@@ -40,6 +40,6 @@ defmodule Fireauth.ServerAuth.SignInResult do
     :oauth_access_token,
     :oauth_refresh_token,
     :oauth_authorization_code,
-    :raw_response
+    raw_response: %{}
   ]
 end
