@@ -3,8 +3,8 @@ defmodule Fireauth.EmailLinkSender.IdentityToolkit do
 
   @behaviour Fireauth.EmailLinkSender
 
-  alias Fireauth.IdentityToolkit.Client
   alias Fireauth.EmailLinkSender.Result
+  alias Fireauth.IdentityToolkit.Client
 
   @impl true
   @spec send_sign_in_link(String.t(), String.t(), keyword()) ::

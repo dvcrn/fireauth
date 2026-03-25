@@ -30,6 +30,7 @@ defmodule Fireauth.Plug.SessionRouter do
     |> Keyword.put_new(:cookie_secure, true)
     |> Keyword.put_new(:cookie_same_site, "Lax")
     |> Keyword.put_new(:cookie_path, "/")
+    |> Keyword.put_new(:cookie_domain, nil)
     |> Keyword.put_new(:create_session_cookie_fun, &Fireauth.create_session_cookie/2)
   end
 
@@ -66,11 +67,15 @@ defmodule Fireauth.Plug.SessionRouter do
       token = random_token()
 
       conn =
-        put_resp_cookie(conn, Keyword.fetch!(opts, :csrf_cookie_name), token,
-          http_only: false,
-          secure: Keyword.fetch!(opts, :cookie_secure),
-          same_site: Keyword.fetch!(opts, :cookie_same_site),
+        conn
+        |> delete_resp_cookie(
+          Keyword.fetch!(opts, :csrf_cookie_name),
           path: Keyword.fetch!(opts, :cookie_path)
+        )
+        |> put_resp_cookie(
+          Keyword.fetch!(opts, :csrf_cookie_name),
+          token,
+          csrf_cookie_options(opts)
         )
 
       json(conn, 200, %{"csrfToken" => token})
@@ -87,12 +92,15 @@ defmodule Fireauth.Plug.SessionRouter do
         max_age = Keyword.fetch!(opts, :valid_duration_s)
 
         conn =
-          put_resp_cookie(conn, Keyword.fetch!(opts, :session_cookie_name), cookie,
-            http_only: true,
-            secure: Keyword.fetch!(opts, :cookie_secure),
-            same_site: Keyword.fetch!(opts, :cookie_same_site),
-            path: Keyword.fetch!(opts, :cookie_path),
-            max_age: max_age
+          conn
+          |> delete_resp_cookie(
+            Keyword.fetch!(opts, :session_cookie_name),
+            path: Keyword.fetch!(opts, :cookie_path)
+          )
+          |> put_resp_cookie(
+            Keyword.fetch!(opts, :session_cookie_name),
+            cookie,
+            session_cookie_options(opts, max_age)
           )
 
         json(conn, 200, %{"status" => "ok"})
@@ -115,7 +123,13 @@ defmodule Fireauth.Plug.SessionRouter do
       opts = conn.private[:fireauth_opts] || []
 
       conn =
-        delete_resp_cookie(conn, Keyword.fetch!(opts, :session_cookie_name),
+        delete_resp_cookie(
+          conn,
+          Keyword.fetch!(opts, :session_cookie_name),
+          delete_cookie_options(opts)
+        )
+        |> delete_resp_cookie(
+          Keyword.fetch!(opts, :session_cookie_name),
           path: Keyword.fetch!(opts, :cookie_path)
         )
 
@@ -182,6 +196,42 @@ defmodule Fireauth.Plug.SessionRouter do
       32
       |> :crypto.strong_rand_bytes()
       |> Base.url_encode64(padding: false)
+    end
+
+    defp csrf_cookie_options(opts) do
+      [
+        http_only: false,
+        secure: Keyword.fetch!(opts, :cookie_secure),
+        same_site: Keyword.fetch!(opts, :cookie_same_site),
+        path: Keyword.fetch!(opts, :cookie_path)
+      ]
+      |> maybe_put_cookie_domain(opts)
+    end
+
+    defp session_cookie_options(opts, max_age) do
+      [
+        http_only: true,
+        secure: Keyword.fetch!(opts, :cookie_secure),
+        same_site: Keyword.fetch!(opts, :cookie_same_site),
+        path: Keyword.fetch!(opts, :cookie_path),
+        max_age: max_age
+      ]
+      |> maybe_put_cookie_domain(opts)
+    end
+
+    defp delete_cookie_options(opts) do
+      [path: Keyword.fetch!(opts, :cookie_path)]
+      |> maybe_put_cookie_domain(opts)
+    end
+
+    defp maybe_put_cookie_domain(cookie_options, opts) do
+      case Keyword.get(opts, :cookie_domain) do
+        domain when is_binary(domain) and domain != "" ->
+          Keyword.put(cookie_options, :domain, domain)
+
+        _other ->
+          cookie_options
+      end
     end
 
     defp json(conn, status, %{} = body) do

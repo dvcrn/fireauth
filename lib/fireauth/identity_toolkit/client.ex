@@ -77,7 +77,10 @@ defmodule Fireauth.IdentityToolkit.Client do
             [{"authorization", "Bearer #{token}"}]
 
           {:error, reason} ->
-            Logger.warning("fireauth: failed to fetch access token for Identity Toolkit request: #{inspect(reason)}")
+            Logger.warning(
+              "fireauth: failed to fetch access token for Identity Toolkit request: #{inspect(reason)}"
+            )
+
             []
         end
     end

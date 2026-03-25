@@ -9,6 +9,7 @@ defmodule Fireauth.Plug.SessionRouterTest do
           session_cookie_name: "session",
           cookie_secure: true,
           cookie_same_site: "Lax",
+          cookie_domain: "example.com",
           valid_duration_s: 600,
           create_session_cookie_fun: &__MODULE__.create_cookie/2
         )
@@ -23,6 +24,7 @@ defmodule Fireauth.Plug.SessionRouterTest do
 
     [set_cookie | _] = get_resp_header(conn, "set-cookie")
     assert set_cookie =~ "fireauth_csrf="
+    assert set_cookie =~ "domain=example.com"
   end
 
   test "POST /session without csrf returns 403" do
@@ -49,6 +51,7 @@ defmodule Fireauth.Plug.SessionRouterTest do
     assert Enum.any?(set_cookies, &String.contains?(&1, "session=session-cookie-jwt"))
     assert Enum.any?(set_cookies, &String.contains?(&1, "HttpOnly"))
     assert Enum.any?(set_cookies, &String.contains?(&1, "max-age=600"))
+    assert Enum.any?(set_cookies, &String.contains?(&1, "domain=example.com"))
   end
 
   def create_cookie(_id_token, _opts), do: {:ok, "session-cookie-jwt"}
