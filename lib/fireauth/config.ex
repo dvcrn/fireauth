@@ -25,6 +25,21 @@ defmodule Fireauth.Config do
     end
   end
 
+  @spec firebase_api_key(keyword()) :: String.t() | nil
+  def firebase_api_key(opts \\ []) when is_list(opts) do
+    if is_binary(Keyword.get(opts, :api_key)) and Keyword.get(opts, :api_key) != "" do
+      Keyword.get(opts, :api_key)
+    else
+      case firebase_web_config(opts) do
+        %{"apiKey" => api_key} when is_binary(api_key) and api_key != "" ->
+          api_key
+
+        _ ->
+          System.get_env("FIREBASE_API_KEY")
+      end
+    end
+  end
+
   @spec firebase_admin_service_account(keyword()) :: service_account() | nil
   def firebase_admin_service_account(opts \\ []) when is_list(opts) do
     otp_app = otp_app(opts)

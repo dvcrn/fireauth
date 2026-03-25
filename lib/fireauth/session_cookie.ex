@@ -7,6 +7,8 @@ defmodule Fireauth.SessionCookie do
   credentials).
   """
 
+  @behaviour Fireauth.SessionCookieCreator
+
   alias Fireauth.Admin.OAuth
   alias Fireauth.Admin.ServiceAccount
   alias Fireauth.Config
@@ -28,6 +30,12 @@ defmodule Fireauth.SessionCookie do
   - `:valid_duration_s` - cookie lifetime in seconds (300..1_209_600). Default: 432_000 (5 days).
   - `:firebase_admin_service_account` - map or JSON string (or base64 JSON). Falls back to config/env.
   """
+  @impl true
+  @spec create_session_cookie(id_token(), keyword()) :: {:ok, session_cookie()} | {:error, term()}
+  def create_session_cookie(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
+    exchange_id_token(id_token, opts)
+  end
+
   @spec exchange_id_token(id_token(), keyword()) :: {:ok, session_cookie()} | {:error, term()}
   def exchange_id_token(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
     valid_duration_s = Keyword.get(opts, :valid_duration_s, 60 * 60 * 24 * 5)

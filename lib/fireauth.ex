@@ -10,6 +10,8 @@ defmodule Fireauth do
   """
 
   alias Fireauth.{Claims, TokenValidator}
+  alias Fireauth.EmailLinkSender.Result, as: EmailLinkResult
+  alias Fireauth.ServerAuth.{SignInResult, StartResult}
 
   @type id_token :: String.t()
   @type claims :: Claims.t()
@@ -50,7 +52,37 @@ defmodule Fireauth do
   @spec create_session_cookie(id_token(), keyword()) ::
           {:ok, Fireauth.SessionCookie.session_cookie()} | {:error, term()}
   def create_session_cookie(id_token, opts \\ []) when is_binary(id_token) and is_list(opts) do
-    Fireauth.SessionCookie.exchange_id_token(id_token, opts)
+    Fireauth.SessionCookieCreator.create_session_cookie(id_token, opts)
+  end
+
+  @doc """
+  Build a provider redirect URI for a server-owned OAuth sign-in flow.
+  """
+  @spec start_oauth_sign_in(String.t(), String.t(), keyword()) ::
+          {:ok, StartResult.t()} | {:error, term()}
+  def start_oauth_sign_in(provider_id, callback_uri, opts \\ [])
+      when is_binary(provider_id) and is_binary(callback_uri) and is_list(opts) do
+    Fireauth.ServerAuth.start_oauth_sign_in(provider_id, callback_uri, opts)
+  end
+
+  @doc """
+  Finish an OAuth provider callback and return a Firebase ID token.
+  """
+  @spec finish_oauth_sign_in(String.t(), String.t(), String.t() | nil, keyword()) ::
+          {:ok, SignInResult.t()} | {:error, term()}
+  def finish_oauth_sign_in(request_uri, session_id, post_body \\ nil, opts \\ [])
+      when is_binary(request_uri) and is_binary(session_id) and is_list(opts) do
+    Fireauth.ServerAuth.finish_oauth_sign_in(request_uri, session_id, post_body, opts)
+  end
+
+  @doc """
+  Send an email-link sign-in action through Firebase Identity Toolkit.
+  """
+  @spec send_email_sign_in_link(String.t(), String.t(), keyword()) ::
+          {:ok, EmailLinkResult.t()} | {:error, term()}
+  def send_email_sign_in_link(email, continue_url, opts \\ [])
+      when is_binary(email) and is_binary(continue_url) and is_list(opts) do
+    Fireauth.EmailLinkSender.send_sign_in_link(email, continue_url, opts)
   end
 
   @doc """

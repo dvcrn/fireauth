@@ -4,6 +4,8 @@ Firebase Auth helpers for Elixir apps:
 
 - Verify Firebase ID tokens (RS256) using Google's SecureToken x509 certs.
 - (Optional) Mint Firebase session cookies (server-side, requires admin credentials via a service account).
+- Start and finish server-owned OAuth provider sign-in flows through Identity Platform.
+- Send Firebase email-link sign-in emails from the server.
 - Plug helpers for both approaches.
 
 ## Install
@@ -11,7 +13,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your mix.exs
 
 ```
-{:fireauth, "~> 0.6.0"},
+{:fireauth, "~> 0.6.1"},
 ```
 
 You can also feed the LLM_SETUP.md file into your agent to automate setup
@@ -195,6 +197,76 @@ end
 
 This makes a network call to Google (Identity Toolkit) to exchange the ID token
 for a session cookie, and requires service account credentials.
+
+### Server-Owned OAuth Sign-In
+
+Fireauth can also start and finish a provider redirect flow on the server,
+instead of relying on a browser-owned Firebase redirect screen.
+
+Typical flow:
+
+1. Your app POSTs to an app-owned route such as `/auth/start`
+2. Your controller calls `Fireauth.start_oauth_sign_in/3`
+3. You redirect the browser to the returned provider URL
+4. The provider redirects back to your app-owned callback URL
+5. Your controller calls `Fireauth.finish_oauth_sign_in/4`
+6. You exchange the returned Firebase ID token for a session cookie
+
+```elixir
+{:ok, start_result} =
+  Fireauth.start_oauth_sign_in(
+    "google.com",
+    "https://example.com/auth/callback/google",
+    otp_app: :my_app
+  )
+
+redirect(conn, external: start_result.auth_uri)
+```
+
+```elixir
+{:ok, sign_in_result} =
+  Fireauth.finish_oauth_sign_in(
+    "https://example.com/auth/callback/google?code=abc",
+    session_id,
+    nil,
+    otp_app: :my_app
+  )
+
+{:ok, session_cookie} =
+  Fireauth.create_session_cookie(sign_in_result.firebase_id_token,
+    otp_app: :my_app,
+    valid_duration_s: 60 * 60 * 24 * 14
+  )
+```
+
+Notes:
+
+- `start_oauth_sign_in/3` currently supports provider IDs such as `"google.com"` and `"github.com"`
+- `finish_oauth_sign_in/4` returns a normalized `%Fireauth.ServerAuth.SignInResult{}`
+- this flow still relies on Firebase / Identity Platform as the upstream auth backend, but removes the extra app-owned loading screens from the OAuth path
+
+### Server-Sent Email Sign-In Links
+
+If you want the browser UI to submit an email address to your backend, you can
+send the email-link sign-in action from the server:
+
+```elixir
+{:ok, result} =
+  Fireauth.send_email_sign_in_link(
+    "user@example.com",
+    "https://example.com/auth/firebase/verify?return_to=/dashboard",
+    otp_app: :my_app
+  )
+```
+
+This sends the Firebase email-link sign-in email through Identity Toolkit
+`accounts:sendOobCode` using `requestType: "EMAIL_SIGNIN"`.
+
+Notes:
+
+- this moves email action creation/sending to your server
+- the email link itself still goes through Firebase's email action flow
+- completing the email-link sign-in still typically uses the Firebase Web SDK on your final verify page via `signInWithEmailLink(...)`
 
 ### Hosted Auth Files (Optional)
 
