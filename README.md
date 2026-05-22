@@ -13,7 +13,7 @@ Firebase Auth helpers for Elixir apps:
 Add to your `mix.exs`:
 
 ```elixir
-{:fireauth, "~> 0.7.0"},
+{:fireauth, "~> 0.8.0"},
 ```
 
 You can also feed the `LLM_SETUP.md` file into your agent to automate setup.
@@ -53,30 +53,50 @@ Or via env var (JSON or base64-encoded JSON): `FIREBASE_ADMIN_SERVICE_ACCOUNT`.
 ### 1) Popup Flow
 
 The simplest integration. The client signs in with the Firebase JS SDK popup,
-obtains an ID token, and sends it to your backend. No hosted auth files needed.
+obtains an ID token, and sends it to your backend. No hosted auth files or
+special routing required — just the Firebase JS SDK on the client.
 
-**Option A: Bearer header** — client sends `Authorization: Bearer <idToken>` on
-each request. Stateless, no admin credentials required.
+There are two ways to pass the authenticated identity to your server:
+
+**Option A: Bearer token** — the client stores the ID token (e.g. in a cookie
+or `localStorage`) and sends it as `Authorization: Bearer <idToken>` on every
+request. The server verifies the token on each request. This is fully stateless
+on the server and does not require admin credentials, but the client is
+responsible for token storage and refresh.
 
 ```elixir
-defmodule MyApp.Router do
-  use Plug.Router
+# In your router or endpoint
+plug Fireauth.Plug, on_invalid_token: :unauthorized
+```
 
-  plug :match
-  plug Fireauth.Plug, on_invalid_token: :unauthorized
-  plug :dispatch
-
-  get "/protected" do
-    case conn.assigns[:fireauth] do
-      %{user: user} -> send_resp(conn, 200, "Hello #{user.email}")
-      _ -> send_resp(conn, 401, "unauthorized")
-    end
-  end
+```elixir
+# In a route or controller
+case conn.assigns[:fireauth] do
+  %{user: user} -> send_resp(conn, 200, "Hello #{user.email}")
+  _ -> send_resp(conn, 401, "unauthorized")
 end
 ```
 
-**Option B: Session cookie** — client POSTs the ID token once, backend mints an
-`httpOnly` cookie. Better for Phoenix/LiveView. Requires admin credentials.
+On the client side:
+
+```javascript
+// After signInWithPopup succeeds:
+const idToken = await user.getIdToken();
+
+// Store and send on every request
+fetch("/api/data", {
+  headers: { "Authorization": `Bearer ${idToken}` }
+});
+```
+
+**Option B: Session cookie** — the client sends the ID token once, and the
+server mints a long-lived `httpOnly` session cookie. After that, the browser
+sends the cookie automatically — no need to manage tokens on the client. This
+is the better choice for Phoenix/LiveView apps where you need the session
+available on WebSocket connect, and for any app that wants automatic cookie
+handling instead of manual `Authorization` headers.
+
+Requires an admin service account (see Configuration above).
 
 ```elixir
 # Mount session endpoints (outside your :browser pipeline to avoid Phoenix CSRF conflicts)
@@ -88,30 +108,80 @@ forward "/auth/firebase",
 plug Fireauth.Plug.SessionCookie, on_invalid_cookie: :unauthorized
 ```
 
-The client exchanges its ID token for a session cookie:
+On the client side, exchange the ID token for a session cookie once after login:
 
 ```javascript
 // After signInWithPopup succeeds:
 const idToken = await user.getIdToken();
+
+// 1. Get a CSRF token
 const csrf = await fetch("/auth/firebase/csrf").then(r => r.json());
+
+// 2. Exchange idToken for a session cookie (set automatically as httpOnly)
 await fetch("/auth/firebase/session", {
   method: "POST",
   headers: { "content-type": "application/json", "x-csrf-token": csrf.csrfToken },
   body: JSON.stringify({ idToken, csrfToken: csrf.csrfToken })
 });
+
+// From here on, the browser sends the session cookie automatically.
+// No need to pass the idToken again.
 ```
 
 ### 2) Redirect Flow
 
-Uses Firebase's `signInWithRedirect`. Requires serving Firebase's hosted auth
-files from your domain (modern browsers block third-party cookies). Fireauth
-provides `Fireauth.Snippets.client/1` to wire the client-side start/verify flow
-without a bundler.
+Uses Firebase's `signInWithRedirect` instead of a popup. This is needed when
+popups are blocked (mobile browsers, embedded webviews) or when you want a
+full-page login experience.
 
-**Endpoint setup** — serve hosted auth files before your router:
+**Why two pages?** Firebase's redirect flow works like this:
 
-- `HostedController` means we're serving static html from Fireauth itself
-- `ProxyController` means we're proxying the requests to upstream Google
+1. **Start page** — your login page calls `signInWithRedirect(...)`, which
+   navigates the browser away to the provider (e.g. Google). Before leaving,
+   Firebase stores pending state in the browser.
+2. The provider authenticates the user and redirects back to Firebase's
+   `/__/auth/handler` page on your domain.
+3. **Verify page** — after Firebase's handler resolves the auth result, the
+   browser lands back on your app. This page calls `getRedirectResult()` to
+   pick up the authenticated user, exchanges the ID token for a session cookie,
+   and redirects to the final destination.
+
+A convenient pattern is to use one route path with GET and POST — the GET
+renders the login form (start), and the POST handles the return from the
+provider redirect (verify). Since the redirect back from the provider arrives
+as a POST, the router naturally separates the two phases:
+
+```elixir
+# In your router
+get "/auth/firebase/start", FirebaseAuthController, :start
+post "/auth/firebase/start", FirebaseAuthController, :create
+```
+
+```elixir
+defmodule MyAppWeb.FirebaseAuthController do
+  use MyAppWeb, :controller
+
+  def start(conn, _params) do
+    # Render login page with fireauth.start(...)
+    render(conn, :start, return_to: get_session(conn, :return_to) || "/")
+  end
+
+  def create(conn, _params) do
+    # Render verify page with fireauth.verify(...)
+    render(conn, :create, return_to: get_session(conn, :return_to) || "/")
+  end
+end
+```
+
+You can also use the same page for both if you prefer — but splitting by HTTP
+method keeps each template focused.
+
+**Requirement: hosted auth files.** Modern browsers block third-party cookies,
+so Firebase's `/__/auth/handler` and `/__/auth/iframe` pages must be served
+from your own domain. Fireauth provides two controllers for this:
+
+- `Fireauth.HostedController` — serves locally-rendered HTML from Fireauth
+- `Fireauth.ProxyController` — proxies requests to upstream Firebase
 
 ```elixir
 # In your Endpoint (before the router)
@@ -136,10 +206,10 @@ forward "/auth/firebase",
 plug Fireauth.Plug.SessionCookie
 ```
 
-**Start page** — embed the snippet and trigger redirect:
+**Start template** (`start.html.heex`) — your login page. Embed the snippet
+and trigger the redirect:
 
 ```elixir
-# In your template (HEEx)
 {Fireauth.Snippets.client(return_to: @return_to, session_base: "/auth/firebase", debug: true)}
 
 <script>
@@ -155,7 +225,9 @@ plug Fireauth.Plug.SessionCookie
 </script>
 ```
 
-**Verify page** — resolves the returning user and exchanges the token:
+**Verify template** (`create.html.heex`) — the page rendered on POST when the
+provider redirect returns. It resolves the authenticated user, exchanges the ID
+token for a session cookie, and redirects to `return_to`:
 
 ```elixir
 {Fireauth.Snippets.client(return_to: @return_to, session_base: "/auth/firebase")}
@@ -175,39 +247,126 @@ plug Fireauth.Plug.SessionCookie
 
 ### 3) Server-Owned OAuth Flow
 
-The server drives the OAuth redirect directly via Identity Platform APIs. No
-Firebase JS SDK is needed for the auth flow itself — useful when you want full
-control over the login UX without Firebase's redirect/popup screens.
+The server drives the entire OAuth redirect through Identity Platform APIs.
+No Firebase JS SDK is needed for the auth flow — your server builds the
+redirect URL, sends the user to the provider, and handles the callback itself.
+This gives you full control over the login UX and is the right choice when you
+don't want to load the Firebase JS SDK at all, or when you need server-side
+logic (e.g. account linking, custom claims) before the session is established.
+
+**Requirements:**
+- Firebase API key (configured via `firebase_web_config` or `FIREBASE_API_KEY`)
+- Admin service account (if you want to mint session cookies after sign-in)
+- A controller with start and callback actions
+- Routes for both GET and POST callbacks (some providers like Apple POST the
+  callback cross-site)
+
+**How it works:**
+
+1. User clicks "Sign in with Google" on your page
+2. Your server calls `Fireauth.start_oauth_sign_in/3` to get a redirect URL
+   from Identity Platform, stores the `session_id` in the Plug session
+3. You redirect the browser to the provider (Google, Apple, etc.)
+4. The provider redirects back to your callback URL with an authorization code
+5. Your server calls `Fireauth.finish_oauth_sign_in/4` to exchange the code
+   for a Firebase ID token
+6. Mint a session cookie with `Fireauth.create_session_cookie/2` and set it
+
+**Router setup:**
 
 ```elixir
-# 1. Start: build provider redirect URL
-{:ok, start_result} =
-  Fireauth.start_oauth_sign_in("google.com", "https://example.com/auth/callback/google",
-    otp_app: :my_app
-  )
+scope "/", MyAppWeb do
+  pipe_through :browser
 
-# Redirect browser to the provider
-redirect(conn, external: start_result.auth_uri)
-# Save start_result.session_id (e.g. in the session) for the callback
+  get "/auth/firebase/start", AuthController, :start
+  post "/auth/firebase/start", AuthController, :create
+  get "/auth/callback/:provider", AuthController, :callback
+end
+
+# Some providers (e.g. Apple) POST the callback cross-site. The POST needs
+# its own pipeline without CSRF protection since it comes from the provider.
+scope "/", MyAppWeb do
+  pipe_through :oauth_callback
+
+  post "/auth/callback/:provider", AuthController, :callback
+end
 ```
 
-```elixir
-# 2. Callback: exchange the provider response for a Firebase ID token
-{:ok, sign_in_result} =
-  Fireauth.finish_oauth_sign_in(
-    # The full callback URL including query params
-    "https://example.com/auth/callback/google?code=abc",
-    session_id,  # from step 1
-    nil,
-    otp_app: :my_app
-  )
+**Controller:**
 
-# 3. Optionally mint a session cookie
-{:ok, session_cookie} =
-  Fireauth.create_session_cookie(sign_in_result.firebase_id_token,
-    otp_app: :my_app,
-    valid_duration_s: 60 * 60 * 24 * 14
-  )
+```elixir
+defmodule MyAppWeb.AuthController do
+  use MyAppWeb, :controller
+
+  @oauth_flow_session_key :firebase_oauth_flow
+
+  # GET /auth/firebase/start?provider=google — render login page
+  def start(conn, %{"provider" => provider}) do
+    create(conn, %{"provider" => provider})
+  end
+
+  def start(conn, _params) do
+    render(conn, :start)
+  end
+
+  # POST /auth/firebase/start — start the server-side OAuth flow
+  def create(conn, %{"provider" => provider}) do
+    callback_uri = url(conn, ~p"/auth/callback/#{provider}")
+
+    {:ok, start_result} =
+      Fireauth.start_oauth_sign_in("#{provider}.com", callback_uri, otp_app: :my_app)
+
+    conn
+    |> put_session(@oauth_flow_session_key, %{
+      session_id: start_result.session_id,
+      started_at: System.system_time(:second)
+    })
+    |> redirect(external: start_result.auth_uri)
+  end
+
+  # POST /auth/callback/:provider — some providers (Apple) POST cross-site.
+  # The SameSite=Lax session cookie won't be sent on cross-site POSTs, so
+  # redirect to GET on our own domain to recover the session cookie.
+  def callback(%{method: "POST"} = conn, %{"provider" => provider} = params) do
+    query =
+      params
+      |> Map.take(["code", "state", "id_token", "user"])
+      |> URI.encode_query()
+
+    redirect(conn, to: "/auth/callback/#{provider}?#{query}")
+  end
+
+  # GET /auth/callback/:provider — complete the OAuth flow
+  def callback(conn, _params) do
+    oauth_flow = get_session(conn, @oauth_flow_session_key)
+
+    {:ok, sign_in_result} =
+      Fireauth.finish_oauth_sign_in(
+        Plug.Conn.request_url(conn),
+        oauth_flow.session_id,
+        nil,
+        otp_app: :my_app
+      )
+
+    # sign_in_result has: firebase_id_token, email, display_name, is_new_user, etc.
+
+    {:ok, session_cookie} =
+      Fireauth.create_session_cookie(sign_in_result.firebase_id_token,
+        otp_app: :my_app,
+        valid_duration_s: 60 * 60 * 24 * 14
+      )
+
+    conn
+    |> delete_session(@oauth_flow_session_key)
+    |> put_resp_cookie("session", session_cookie,
+      http_only: true,
+      secure: true,
+      same_site: "Lax",
+      max_age: 60 * 60 * 24 * 14
+    )
+    |> redirect(to: "/")
+  end
+end
 ```
 
 `finish_oauth_sign_in/4` returns a `%Fireauth.ServerAuth.SignInResult{}` with
