@@ -11,6 +11,7 @@ defmodule Fireauth do
 
   alias Fireauth.{Claims, TokenValidator}
   alias Fireauth.EmailLinkSender.Result, as: EmailLinkResult
+  alias Fireauth.OobCode.Result, as: OobCodeResult
   alias Fireauth.ServerAuth.{SignInResult, StartResult}
 
   @type id_token :: String.t()
@@ -100,6 +101,29 @@ defmodule Fireauth do
   @spec create_custom_token(String.t(), keyword()) :: {:ok, String.t()} | {:error, term()}
   def create_custom_token(uid, opts \\ []) when is_binary(uid) and is_list(opts) do
     Fireauth.CustomToken.create_custom_token(uid, opts)
+  end
+
+  @doc """
+  Read what an email action code is for without consuming it.
+
+  Codes arrive as the `oobCode` query parameter on the action links in Firebase
+  emails.
+  """
+  @spec check_oob_code(String.t(), keyword()) :: {:ok, OobCodeResult.t()} | {:error, term()}
+  def check_oob_code(oob_code, opts \\ []) when is_binary(oob_code) and is_list(opts) do
+    Fireauth.OobCode.check(oob_code, opts)
+  end
+
+  @doc """
+  Apply an email action code, verifying the address or email change it was
+  issued for.
+
+  Codes are single use, so apply them from a user action rather than on page
+  load.
+  """
+  @spec apply_oob_code(String.t(), keyword()) :: {:ok, OobCodeResult.t()} | {:error, term()}
+  def apply_oob_code(oob_code, opts \\ []) when is_binary(oob_code) and is_list(opts) do
+    Fireauth.OobCode.apply_code(oob_code, opts)
   end
 
   @doc """

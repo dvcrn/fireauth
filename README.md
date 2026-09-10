@@ -520,6 +520,21 @@ plug Fireauth.Plug,
 Proxying tracks Google's current bundle; the embedded copy works offline and
 without an upstream round trip, at the cost of ageing until the next release.
 
+Both serve Google's own unstyled page. To render your own instead, point the
+console at a route of your own and drive the code from Elixir:
+
+```elixir
+with {:ok, %{operation: :verify_email, email: email}} <- Fireauth.check_oob_code(oob_code),
+     {:ok, _result} <- Fireauth.apply_oob_code(oob_code) do
+  # render your own confirmation for `email`
+end
+```
+
+`check_oob_code/2` reports what a code is for and leaves it unspent;
+`apply_oob_code/2` spends it. Codes are single use, so apply them from a form
+submission rather than on page load: mail scanners follow links in email and
+will otherwise consume the code before the recipient clicks.
+
 ## License
 
 MIT
