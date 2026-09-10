@@ -5,6 +5,7 @@ defmodule Fireauth.HostedControllerTest do
   import Mox
 
   alias Fireauth.HostedController
+  alias Fireauth.ProxyController
 
   setup :verify_on_exit!
 
@@ -19,7 +20,27 @@ defmodule Fireauth.HostedControllerTest do
     :ok
   end
 
-  test "proxies hosted auth action html upstream" do
+  test "serves bundled action html" do
+    conn =
+      conn(:get, "/__/auth/action?mode=verifyEmail")
+      |> HostedController.call(HostedController.init([]))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/html"
+  end
+
+  test "serves bundled action script" do
+    conn =
+      conn(:get, "/__/auth/action.js")
+      |> HostedController.call(HostedController.init([]))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/javascript"
+  end
+
+  test "proxies action html upstream when routed through the proxy controller" do
     expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "proj", "/__/auth/action", "mode=signIn" ->
       {:ok,
        %{
@@ -31,32 +52,11 @@ defmodule Fireauth.HostedControllerTest do
 
     conn =
       conn(:get, "/__/auth/action?mode=signIn")
-      |> HostedController.call(HostedController.init(project_id: "proj"))
+      |> ProxyController.call(ProxyController.init(project_id: "proj"))
 
     assert conn.halted
     assert conn.status == 200
-    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/html"
     assert conn.resp_body =~ "proxied action"
-  end
-
-  test "proxies hosted auth action script upstream" do
-    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "proj", "/__/auth/action.js", nil ->
-      {:ok,
-       %{
-         status: 200,
-         headers: [{"content-type", "text/javascript"}],
-         body: "console.log('proxied action.js')"
-       }}
-    end)
-
-    conn =
-      conn(:get, "/__/auth/action.js")
-      |> HostedController.call(HostedController.init(project_id: "proj"))
-
-    assert conn.halted
-    assert conn.status == 200
-    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/javascript"
-    assert conn.resp_body =~ "proxied action.js"
   end
 
   test "serves snippet-based handler html" do

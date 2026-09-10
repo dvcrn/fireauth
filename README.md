@@ -493,8 +493,32 @@ Firebase Web SDK on your verify page via `signInWithEmailLink(...)`.
 To support redirect-mode auth, serve Firebase's helper files from your domain
 using `callback_overrides`. Two controller options:
 
-- **`Fireauth.HostedController`** — serves local snippet-based HTML for `handler` and `iframe`, proxies `action` and `action.js` to Firebase upstream.
-- **`Fireauth.ProxyController`** — transparently proxies everything to `https://<project>.firebaseapp.com` with in-memory caching.
+- **`Fireauth.HostedController`** serves local snippet-based HTML for `handler` and `iframe`, and embedded copies of the remaining helper files.
+- **`Fireauth.ProxyController`** transparently proxies everything to `https://<project>.firebaseapp.com` with in-memory caching.
+
+### Email Action Handler
+
+Firebase's email templates (verification, password reset, email change) link to
+an action handler page. Setting a custom action URL in the Firebase console to
+`https://yourdomain.com/__/auth/action` keeps those links on your domain without
+touching `authDomain`, so OAuth redirect callbacks stay where they are.
+
+Both controllers serve that path: `Fireauth.HostedController` from the embedded
+copy in `priv/static/__/auth/`, `Fireauth.ProxyController` from upstream. The
+page loads `action.js` and `experiments.js` relative to itself, so route those
+alongside it:
+
+```elixir
+plug Fireauth.Plug,
+  callback_overrides: %{
+    "/__/auth/action" => Fireauth.ProxyController,
+    "/__/auth/action.js" => Fireauth.ProxyController,
+    "/__/auth/experiments.js" => Fireauth.ProxyController
+  }
+```
+
+Proxying tracks Google's current bundle; the embedded copy works offline and
+without an upstream round trip, at the cost of ageing until the next release.
 
 ## License
 

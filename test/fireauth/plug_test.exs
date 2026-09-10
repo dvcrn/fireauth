@@ -90,6 +90,26 @@ defmodule Fireauth.PlugTest do
   end
 
   test "falls back to default_controller for /__/auth/action" do
+    conn =
+      conn(:get, "/__/auth/action?mode=signIn")
+      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert conn.resp_body =~ "fireauth.oob.OobHandler.initialize"
+  end
+
+  test "falls back to default_controller for /__/auth/action.js" do
+    conn =
+      conn(:get, "/__/auth/action.js")
+      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
+
+    assert conn.halted
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-type") |> List.first() =~ "text/javascript"
+  end
+
+  test "callback_overrides can proxy /__/auth/action upstream" do
     expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action", "mode=signIn" ->
       {:ok,
        %{
@@ -101,30 +121,16 @@ defmodule Fireauth.PlugTest do
 
     conn =
       conn(:get, "/__/auth/action?mode=signIn")
-      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
+      |> FireauthPlug.call(
+        FireauthPlug.init(
+          project_id: "myproj",
+          callback_overrides: %{"/__/auth/action" => Fireauth.ProxyController}
+        )
+      )
 
     assert conn.halted
     assert conn.status == 200
     assert conn.resp_body =~ "action handler"
-  end
-
-  test "falls back to default_controller for /__/auth/action.js" do
-    expect(Fireauth.FirebaseUpstreamMock, :fetch, fn "myproj", "/__/auth/action.js", nil ->
-      {:ok,
-       %{
-         status: 200,
-         headers: [{"content-type", "text/javascript"}],
-         body: "console.log('action.js')"
-       }}
-    end)
-
-    conn =
-      conn(:get, "/__/auth/action.js")
-      |> FireauthPlug.call(FireauthPlug.init(project_id: "myproj"))
-
-    assert conn.halted
-    assert conn.status == 200
-    assert conn.resp_body =~ "action.js"
   end
 
   test "callback_overrides dispatches to tuple controller action" do

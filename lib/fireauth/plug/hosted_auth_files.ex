@@ -35,6 +35,7 @@ defmodule Fireauth.Plug.HostedAuthFiles do
 
   def call(conn, _opts), do: conn
 
+  defp content_type_for("action"), do: "text/html"
   defp content_type_for("handler"), do: "text/html"
   defp content_type_for("iframe"), do: "text/html"
 
