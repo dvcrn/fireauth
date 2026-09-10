@@ -36,21 +36,21 @@ defmodule Fireauth.OobCodeTest do
 
   describe "identity toolkit adapter" do
     test "check/2 reports the operation without consuming the code" do
-      opts = [firebase_api_key: "test-key", req_options: [plug: &respond(&1, "VERIFY_EMAIL")]]
+      opts = [api_key: "test-key", req_options: [plug: &respond(&1, "VERIFY_EMAIL")]]
 
       assert {:ok, %Result{operation: :verify_email, email: "user@example.com"}} =
                OobCode.check("code-123", opts)
     end
 
     test "check/2 maps unknown request types" do
-      opts = [firebase_api_key: "test-key", req_options: [plug: &respond(&1, "SOMETHING_NEW")]]
+      opts = [api_key: "test-key", req_options: [plug: &respond(&1, "SOMETHING_NEW")]]
 
       assert {:ok, %Result{operation: {:unknown, "SOMETHING_NEW"}}} =
                OobCode.check("code-123", opts)
     end
 
     test "apply_code/2 posts the code to accounts:update" do
-      opts = [firebase_api_key: "test-key", req_options: [plug: &respond(&1, nil)]]
+      opts = [api_key: "test-key", req_options: [plug: &respond(&1, nil)]]
 
       assert {:ok, %Result{email: "user@example.com"}} = OobCode.apply_code("code-123", opts)
     end
@@ -67,7 +67,7 @@ defmodule Fireauth.OobCodeTest do
       end
 
       assert {:error, {:identity_toolkit_error, path, 400, body}} =
-               OobCode.check("code-123", firebase_api_key: "test-key", req_options: [plug: plug])
+               OobCode.check("code-123", api_key: "test-key", req_options: [plug: plug])
 
       assert path == "accounts:resetPassword"
       assert body["error"]["message"] == "EXPIRED_OOB_CODE"
