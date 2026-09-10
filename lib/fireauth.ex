@@ -12,6 +12,7 @@ defmodule Fireauth do
   alias Fireauth.{Claims, TokenValidator}
   alias Fireauth.EmailLinkSender.Result, as: EmailLinkResult
   alias Fireauth.OobCode.Result, as: OobCodeResult
+  alias Fireauth.PasswordReset.Result, as: PasswordResetResult
   alias Fireauth.ServerAuth.{SignInResult, StartResult}
 
   @type id_token :: String.t()
@@ -124,6 +125,27 @@ defmodule Fireauth do
   @spec apply_oob_code(String.t(), keyword()) :: {:ok, OobCodeResult.t()} | {:error, term()}
   def apply_oob_code(oob_code, opts \\ []) when is_binary(oob_code) and is_list(opts) do
     Fireauth.OobCode.apply_code(oob_code, opts)
+  end
+
+  @doc """
+  Mail a password reset link through Firebase Identity Toolkit.
+  """
+  @spec send_password_reset_email(String.t(), String.t() | nil, keyword()) ::
+          {:ok, PasswordResetResult.t()} | {:error, term()}
+  def send_password_reset_email(email, continue_url \\ nil, opts \\ [])
+      when is_binary(email) and (is_binary(continue_url) or is_nil(continue_url)) and
+             is_list(opts) do
+    Fireauth.PasswordReset.send_email(email, continue_url, opts)
+  end
+
+  @doc """
+  Set a new password using the `oobCode` from a reset email.
+  """
+  @spec confirm_password_reset(String.t(), String.t(), keyword()) ::
+          {:ok, PasswordResetResult.t()} | {:error, term()}
+  def confirm_password_reset(oob_code, new_password, opts \\ [])
+      when is_binary(oob_code) and is_binary(new_password) and is_list(opts) do
+    Fireauth.PasswordReset.confirm(oob_code, new_password, opts)
   end
 
   @doc """

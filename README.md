@@ -535,6 +535,14 @@ end
 submission rather than on page load: mail scanners follow links in email and
 will otherwise consume the code before the recipient clicks.
 
+Password resets need a new password alongside the code, so they have their own
+pair:
+
+```elixir
+Fireauth.send_password_reset_email(email, "https://www.example.com/auth/action")
+Fireauth.confirm_password_reset(oob_code, new_password)
+```
+
 ## License
 
 MIT
